@@ -3,7 +3,7 @@ import 'react-native-reanimated';
 import React, { useState, useEffect } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createDrawerNavigator } from '@react-navigation/drawer';
-import { View, StyleSheet, ActivityIndicator, Text } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
 import { supabase } from './lib/supabase';
 import Auth from './components/Auth';
 import * as Font from 'expo-font';
@@ -33,13 +33,13 @@ function MainNavigator() {
   return (
     <Drawer.Navigator 
       initialRouteName="Home"
-      screenOptions={{
+      screenOptions={({ navigation }) => ({
         headerStyle: {
           backgroundColor: '#2089dc',
         },
         headerTintColor: '#fff',
         headerTitleStyle: {
-          fontWeight: 'bold',
+          display: 'none',
         },
         drawerStyle: {
           width: 300,
@@ -50,42 +50,131 @@ function MainNavigator() {
         drawerItemStyle: {
           paddingVertical: 8,
         },
-      }}
+        drawerActiveTintColor: '#2089dc',
+        drawerInactiveTintColor: '#333',
+        headerLeft: () => (
+          <View style={styles.headerLeftContainer}>
+            <TouchableOpacity 
+              onPress={() => {
+                console.log('Menu button pressed');
+                try {
+                  navigation.openDrawer();
+                  console.log('Drawer opened successfully');
+                } catch (error) {
+                  console.error('Error opening drawer:', error);
+                }
+              }}
+              style={styles.headerIconContainer}
+            >
+              <FontAwesome 
+                name="bars" 
+                size={24} 
+                color="#fff" 
+              />
+            </TouchableOpacity>
+            <FontAwesome 
+              name="home" 
+              size={24} 
+              color="#fff" 
+              style={styles.headerScreenIcon}
+            />
+          </View>
+        ),
+      })}
     >
       <Drawer.Screen 
         name="Home" 
         component={HomeScreen}
         options={{
           title: 'Home',
+          drawerIcon: ({ color, size }) => (
+            <FontAwesome name="home" size={size} color={color} />
+          ),
         }}
       />
       <Drawer.Screen 
         name="Profile" 
         component={ProfileScreen}
-        options={{
+        options={({ navigation }) => ({
           title: 'Profile',
-        }}
+          drawerIcon: ({ color, size }) => (
+            <FontAwesome name="user" size={size} color={color} />
+          ),
+          headerLeft: () => (
+            <View style={styles.headerLeftContainer}>
+              <TouchableOpacity 
+                onPress={() => navigation.openDrawer()}
+                style={styles.headerIconContainer}
+              >
+                <FontAwesome name="bars" size={24} color="#fff" />
+              </TouchableOpacity>
+              <FontAwesome name="user" size={24} color="#fff" style={styles.headerScreenIcon} />
+            </View>
+          ),
+        })}
       />
       <Drawer.Screen 
         name="Settings" 
         component={SettingsScreen}
-        options={{
+        options={({ navigation }) => ({
           title: 'Settings',
-        }}
+          drawerIcon: ({ color, size }) => (
+            <FontAwesome name="cog" size={size} color={color} />
+          ),
+          headerLeft: () => (
+            <View style={styles.headerLeftContainer}>
+              <TouchableOpacity 
+                onPress={() => navigation.openDrawer()}
+                style={styles.headerIconContainer}
+              >
+                <FontAwesome name="bars" size={24} color="#fff" />
+              </TouchableOpacity>
+              <FontAwesome name="cog" size={24} color="#fff" style={styles.headerScreenIcon} />
+            </View>
+          ),
+        })}
       />
       <Drawer.Screen 
         name="Balance" 
         component={BalanceScreen}
-        options={{
+        options={({ navigation }) => ({
           title: 'Balance',
-        }}
+          drawerIcon: ({ color, size }) => (
+            <FontAwesome name="money" size={size} color={color} />
+          ),
+          headerLeft: () => (
+            <View style={styles.headerLeftContainer}>
+              <TouchableOpacity 
+                onPress={() => navigation.openDrawer()}
+                style={styles.headerIconContainer}
+              >
+                <FontAwesome name="bars" size={24} color="#fff" />
+              </TouchableOpacity>
+              <FontAwesome name="money" size={24} color="#fff" style={styles.headerScreenIcon} />
+            </View>
+          ),
+        })}
       />
       <Drawer.Screen 
         name="Inbox" 
         component={InboxScreen}
-        options={{
+        options={({ navigation }) => ({
           title: 'Inbox',
-        }}
+          drawerIcon: ({ color, size }) => (
+            <FontAwesome name="envelope" size={size} color={color} />
+          ),
+          headerLeft: () => (
+            <View style={styles.headerLeftContainer}>
+              <TouchableOpacity 
+                onPress={() => navigation.openDrawer()}
+                style={styles.headerIconContainer}
+              >
+                <FontAwesome name="bars" size={24} color="#fff" />
+              </TouchableOpacity>
+              <FontAwesome name="envelope" size={24} color="#fff" style={styles.headerScreenIcon} />
+            </View>
+          ),
+        })}
       />
     </Drawer.Navigator>
   );
@@ -193,5 +282,15 @@ const styles = StyleSheet.create({
     color: 'red',
     fontSize: 16,
     textAlign: 'center',
+  },
+  headerLeftContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  headerIconContainer: {
+    padding: 8,
+  },
+  headerScreenIcon: {
+    marginLeft: 8,
   },
 });
