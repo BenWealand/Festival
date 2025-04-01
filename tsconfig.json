@@ -5,6 +5,22 @@
     "baseUrl": ".",
     "paths": {
       "@env": ["./node_modules/react-native-dotenv"]
-    }
-  }
+    },
+    "types": ["react-native", "jest"],
+    "allowJs": true,
+    "esModuleInterop": true,
+    "jsx": "react-native",
+    "lib": ["dom", "esnext"],
+    "moduleResolution": "node",
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "typeRoots": ["./src/types", "./node_modules/@types"]
+  },
+  "exclude": [
+    "node_modules",
+    "babel.config.js",
+    "metro.config.js",
+    "jest.config.js"
+  ]
 }
