@@ -2,16 +2,16 @@ import 'react-native-reanimated';
 import React, { useState, useEffect } from 'react'
 import { NavigationContainer } from '@react-navigation/native'
 import { createDrawerNavigator } from '@react-navigation/drawer'
-import { View, StyleSheet } from 'react-native'
+import { View, StyleSheet, ActivityIndicator } from 'react-native'
 import { supabase } from './lib/supabase'
 import Auth from './components/Auth'
-import Account from './components/Account'
 
 // Import screens
 import HomeScreen from './screens/HomeScreen'
 import SettingsScreen from './screens/SettingsScreen'
 import BalanceScreen from './screens/BalanceScreen'
 import InboxScreen from './screens/InboxScreen'
+import ProfileScreen from './screens/ProfileScreen'
 
 // App State for session refresh
 import { AppState } from 'react-native'
@@ -47,10 +47,10 @@ function MainNavigator() {
         }}
       />
       <Drawer.Screen 
-        name="Account" 
-        component={Account}
+        name="Profile" 
+        component={ProfileScreen}
         options={{
-          title: 'Account',
+          title: 'Profile',
         }}
       />
       <Drawer.Screen 
@@ -80,16 +80,31 @@ function MainNavigator() {
 
 export default function App() {
   const [session, setSession] = useState(null)
+  const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Get initial session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
+      setLoading(false)
     })
 
-    supabase.auth.onAuthStateChange((_event, session) => {
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
+      setLoading(false)
     })
+
+    return () => subscription.unsubscribe()
   }, [])
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2089dc" />
+      </View>
+    )
+  }
 
   return (
     <NavigationContainer>
@@ -101,3 +116,11 @@ export default function App() {
     </NavigationContainer>
   )
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+})
