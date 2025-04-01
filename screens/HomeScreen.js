@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import LocationTracker from '../components/LocationTracker';
+import { FontAwesome } from '@expo/vector-icons';
 
 // Sample locations data - you can replace these with your actual locations
 const locations = [
@@ -12,91 +13,90 @@ const locations = [
   { id: 6, name: 'Location 6' },
 ];
 
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = (width - 60) / 2; // 2 cards per row with padding
-
 export default function HomeScreen() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Available Locations</Text>
+    <ScrollView style={styles.container}>
       <LocationTracker />
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.grid}>
-          {locations.map((location) => (
-            <View key={location.id} style={styles.card}>
-              <Text style={styles.cardTitle}>{location.name}</Text>
-              <View style={styles.cardContent}>
-                {/* Placeholder for future content */}
-                <Text style={styles.placeholder}>Details coming soon</Text>
-              </View>
+      
+      <View style={styles.locationsContainer}>
+        {locations.map((location) => (
+          <TouchableOpacity key={location.id} style={styles.locationBox}>
+            <View style={styles.logoContainer}>
+              <View style={styles.logoCircle} />
             </View>
-          ))}
-        </View>
-      </ScrollView>
-    </View>
+            
+            <View style={styles.locationInfo}>
+              <Text style={styles.locationText}>{location.name}</Text>
+            </View>
+            
+            <View style={styles.pointsContainer}>
+              <Text style={styles.pointsNumber}>123</Text>
+              <Text style={styles.pointsLabel}>points</Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
     backgroundColor: '#f5f5f5',
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    color: '#333',
+  locationsContainer: {
+    padding: 16,
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingBottom: 20,
-  },
-  grid: {
+  locationBox: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  card: {
-    width: CARD_WIDTH,
-    height: 150,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    marginBottom: 20,
-    padding: 15,
+    backgroundColor: 'white',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.25,
+    shadowOpacity: 0.1,
     shadowRadius: 3.84,
     elevation: 5,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#333',
-  },
-  cardContent: {
-    flex: 1,
+  logoContainer: {
+    width: 50,
+    height: 50,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f8f8f8',
-    borderRadius: 8,
-    padding: 10,
   },
-  placeholder: {
-    color: '#666',
+  logoCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#2089dc',
+  },
+  locationInfo: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  locationText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+  },
+  pointsContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pointsNumber: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#2089dc',
+  },
+  pointsLabel: {
     fontSize: 14,
-    textAlign: 'center',
+    color: '#666',
+    marginTop: 4,
   },
 }); 
