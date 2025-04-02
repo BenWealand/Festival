@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Modal, ScrollView } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import { COLORS } from '../constants/theme';
 
 // Sample data - replace with actual data from your backend
 const sampleMessages = [
@@ -210,13 +211,13 @@ export default function InboxScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: COLORS.surface.primary,
   },
   categoriesContainer: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface.card,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: COLORS.border,
   },
   categoriesList: {
     paddingHorizontal: 10,
@@ -228,25 +229,25 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginHorizontal: 5,
     borderRadius: 20,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: COLORS.surface.secondary,
   },
   selectedCategory: {
-    backgroundColor: '#2089dc',
+    backgroundColor: COLORS.primary,
   },
   categoryText: {
     marginLeft: 8,
     fontSize: 14,
-    color: '#666',
+    color: COLORS.text.white,
   },
   selectedCategoryText: {
-    color: '#fff',
+    color: COLORS.text.white,
   },
   messagesList: {
     padding: 10,
   },
   messageItem: {
     flexDirection: 'row',
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface.card,
     padding: 15,
     borderRadius: 10,
     marginBottom: 10,
@@ -260,7 +261,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   unreadMessage: {
-    backgroundColor: '#f8f9ff',
+    backgroundColor: COLORS.surface.secondary,
   },
   messageContent: {
     flex: 1,
@@ -274,31 +275,33 @@ const styles = StyleSheet.create({
   sender: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: COLORS.text.white,
   },
   unreadText: {
-    color: '#2089dc',
+    color: COLORS.text.white,
     fontWeight: '700',
   },
   timestamp: {
     fontSize: 14,
-    color: '#666',
+    color: COLORS.text.white,
+    opacity: 0.7,
   },
   subject: {
     fontSize: 15,
-    color: '#333',
+    color: COLORS.text.white,
     marginBottom: 5,
   },
   preview: {
     fontSize: 14,
-    color: '#666',
+    color: COLORS.text.white,
+    opacity: 0.7,
     lineHeight: 20,
   },
   unreadDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#2089dc',
+    backgroundColor: COLORS.primary,
     marginLeft: 10,
     alignSelf: 'center',
   },
@@ -308,7 +311,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalContent: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface.card,
     borderRadius: 15,
     padding: 20,
     width: '90%',
@@ -331,7 +334,7 @@ const styles = StyleSheet.create({
   modalSender: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: COLORS.text.white,
   },
   closeButton: {
     padding: 5,
@@ -339,12 +342,13 @@ const styles = StyleSheet.create({
   modalSubject: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#2089dc',
+    color: COLORS.text.white,
     marginBottom: 10,
   },
   modalTimestamp: {
     fontSize: 14,
-    color: '#666',
+    color: COLORS.text.white,
+    opacity: 0.7,
     marginBottom: 15,
   },
   modalBody: {
@@ -352,7 +356,7 @@ const styles = StyleSheet.create({
   },
   modalText: {
     fontSize: 16,
-    color: '#333',
+    color: COLORS.text.white,
     lineHeight: 24,
   },
 }); 

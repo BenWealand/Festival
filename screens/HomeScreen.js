@@ -1,19 +1,55 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import LocationTracker from '../components/LocationTracker';
 import { FontAwesome } from '@expo/vector-icons';
-
-// Sample locations data - you can replace these with your actual locations
-const locations = [
-  { id: 1, name: 'Location 1' },
-  { id: 2, name: 'Location 2' },
-  { id: 3, name: 'Location 3' },
-  { id: 4, name: 'Location 4' },
-  { id: 5, name: 'Location 5' },
-  { id: 6, name: 'Location 6' },
-];
+import { supabase } from '../lib/supabase';
+import { COLORS } from '../constants/theme';
 
 export default function HomeScreen() {
+  const [locations, setLocations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const fetchLocations = async () => {
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('locations')
+          .select('id, name, logo_url')
+          .order('id', { ascending: true });
+
+        if (error) throw error;
+
+        setLocations(data || []);
+      } catch (error) {
+        console.error('Error fetching locations:', error.message);
+        setError('Failed to load locations');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLocations();
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.text.white} />
+        <Text style={styles.loadingText}>Loading locations...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.container}>
       <LocationTracker />
@@ -22,7 +58,15 @@ export default function HomeScreen() {
         {locations.map((location) => (
           <TouchableOpacity key={location.id} style={styles.locationBox}>
             <View style={styles.logoContainer}>
-              <View style={styles.logoCircle} />
+              {location.logo_url ? (
+                <Image 
+                  source={{ uri: location.logo_url }} 
+                  style={styles.logo}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.logoCircle} />
+              )}
             </View>
             
             <View style={styles.locationInfo}>
@@ -43,14 +87,35 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: COLORS.surface.primary,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: COLORS.text.white,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    color: COLORS.text.white,
+    fontSize: 16,
+    textAlign: 'center',
   },
   locationsContainer: {
     padding: 16,
   },
   locationBox: {
     flexDirection: 'row',
-    backgroundColor: 'white',
+    backgroundColor: COLORS.surface.card,
     borderRadius: 12,
     padding: 16,
     marginBottom: 12,
@@ -70,11 +135,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  logo: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
   logoCircle: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#2089dc',
+    backgroundColor: COLORS.primary,
   },
   locationInfo: {
     flex: 1,
@@ -83,7 +153,7 @@ const styles = StyleSheet.create({
   locationText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#333',
+    color: COLORS.text.white,
   },
   pointsContainer: {
     alignItems: 'center',
@@ -92,11 +162,11 @@ const styles = StyleSheet.create({
   pointsNumber: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#2089dc',
+    color: COLORS.text.white,
   },
   pointsLabel: {
     fontSize: 14,
-    color: '#666',
+    color: COLORS.text.white,
     marginTop: 4,
   },
 }); 

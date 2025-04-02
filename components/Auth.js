@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Alert, StyleSheet, View, Text, TouchableOpacity } from 'react-native'
 import { supabase } from '../lib/supabase'
 import { Button, Input } from '@rneui/themed'
+import { COLORS } from '../constants/theme'
 
 export default function Auth() {
   const [email, setEmail] = useState('')
@@ -88,13 +89,14 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     padding: 20,
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface.primary,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     textAlign: 'center',
     marginBottom: 30,
+    color: COLORS.text.primary,
   },
   verticallySpaced: {
     paddingTop: 4,
@@ -109,7 +111,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   switchText: {
-    color: '#2089dc',
+    color: COLORS.primary,
     fontSize: 16,
   },
 }) 

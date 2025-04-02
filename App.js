@@ -9,6 +9,7 @@ import Auth from './components/Auth';
 import * as Font from 'expo-font';
 import { FontAwesome } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { COLORS } from './constants/theme';
 
 // Import screens
 import HomeScreen from './screens/HomeScreen';
@@ -36,23 +37,25 @@ function MainNavigator() {
       initialRouteName="Home"
       screenOptions={({ navigation }) => ({
         headerStyle: {
-          backgroundColor: '#2089dc',
+          backgroundColor: COLORS.primary,
         },
-        headerTintColor: '#fff',
+        headerTintColor: COLORS.text.white,
         headerTitleStyle: {
           display: 'none',
         },
         drawerStyle: {
           width: 300,
+          backgroundColor: COLORS.surface.primary,
         },
         drawerLabelStyle: {
           fontSize: 16,
+          color: COLORS.text.white,
         },
         drawerItemStyle: {
           paddingVertical: 8,
         },
-        drawerActiveTintColor: '#2089dc',
-        drawerInactiveTintColor: '#333',
+        drawerActiveTintColor: COLORS.text.white,
+        drawerInactiveTintColor: COLORS.text.white,
         headerLeft: () => (
           <View style={styles.headerLeftContainer}>
             <TouchableOpacity 
@@ -70,13 +73,13 @@ function MainNavigator() {
               <FontAwesome 
                 name="bars" 
                 size={24} 
-                color="#fff" 
+                color={COLORS.text.white} 
               />
             </TouchableOpacity>
             <FontAwesome 
               name="home" 
               size={24} 
-              color="#fff" 
+              color={COLORS.text.white} 
               style={styles.headerScreenIcon}
             />
           </View>
@@ -107,9 +110,9 @@ function MainNavigator() {
                 onPress={() => navigation.openDrawer()}
                 style={styles.headerIconContainer}
               >
-                <FontAwesome name="bars" size={24} color="#fff" />
+                <FontAwesome name="bars" size={24} color={COLORS.text.white} />
               </TouchableOpacity>
-              <FontAwesome name="user" size={24} color="#fff" style={styles.headerScreenIcon} />
+              <FontAwesome name="user" size={24} color={COLORS.text.white} style={styles.headerScreenIcon} />
             </View>
           ),
         })}
@@ -128,9 +131,9 @@ function MainNavigator() {
                 onPress={() => navigation.openDrawer()}
                 style={styles.headerIconContainer}
               >
-                <FontAwesome name="bars" size={24} color="#fff" />
+                <FontAwesome name="bars" size={24} color={COLORS.text.white} />
               </TouchableOpacity>
-              <FontAwesome name="cog" size={24} color="#fff" style={styles.headerScreenIcon} />
+              <FontAwesome name="cog" size={24} color={COLORS.text.white} style={styles.headerScreenIcon} />
             </View>
           ),
         })}
@@ -146,7 +149,7 @@ function MainNavigator() {
               onPress={() => navigation.goBack()}
               style={styles.headerIconContainer}
             >
-              <FontAwesome name="arrow-left" size={24} color="#fff" />
+              <FontAwesome name="arrow-left" size={24} color={COLORS.text.white} />
             </TouchableOpacity>
           ),
         })}
@@ -165,9 +168,9 @@ function MainNavigator() {
                 onPress={() => navigation.openDrawer()}
                 style={styles.headerIconContainer}
               >
-                <FontAwesome name="bars" size={24} color="#fff" />
+                <FontAwesome name="bars" size={24} color={COLORS.text.white} />
               </TouchableOpacity>
-              <FontAwesome name="money" size={24} color="#fff" style={styles.headerScreenIcon} />
+              <FontAwesome name="money" size={24} color={COLORS.text.white} style={styles.headerScreenIcon} />
             </View>
           ),
         })}
@@ -186,9 +189,9 @@ function MainNavigator() {
                 onPress={() => navigation.openDrawer()}
                 style={styles.headerIconContainer}
               >
-                <FontAwesome name="bars" size={24} color="#fff" />
+                <FontAwesome name="bars" size={24} color={COLORS.text.white} />
               </TouchableOpacity>
-              <FontAwesome name="envelope" size={24} color="#fff" style={styles.headerScreenIcon} />
+              <FontAwesome name="envelope" size={24} color={COLORS.text.white} style={styles.headerScreenIcon} />
             </View>
           ),
         })}
@@ -249,7 +252,7 @@ export default function App() {
     return (
       <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size={36} color="#2089dc" />
+          <ActivityIndicator size="large" color={COLORS.text.white} />
           <Text style={styles.loadingText}>Loading...</Text>
         </View>
       </GestureHandlerRootView>
@@ -284,19 +287,22 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: COLORS.surface.primary,
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
+    color: COLORS.text.white,
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: COLORS.surface.primary,
   },
   errorText: {
-    color: 'red',
+    color: COLORS.text.white,
     fontSize: 16,
     textAlign: 'center',
   },

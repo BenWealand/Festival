@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import { COLORS } from '../constants/theme';
 
 export default function SettingsScreen() {
   const navigation = useNavigation();
@@ -39,7 +40,7 @@ export default function SettingsScreen() {
           onPress={() => navigation.navigate('NotificationSettings')}
         >
           <View style={styles.settingLeft}>
-            <FontAwesome name="bell" size={24} color="#2089dc" style={styles.icon} />
+            <FontAwesome name="bell" size={24} color={COLORS.primary} style={styles.icon} />
             <Text style={styles.settingText}>Notifications</Text>
           </View>
           <FontAwesome name="chevron-right" size={16} color="#999" />
@@ -50,7 +51,7 @@ export default function SettingsScreen() {
           onPress={handleHelpPress}
         >
           <View style={styles.settingLeft}>
-            <FontAwesome name="question-circle" size={24} color="#2089dc" style={styles.icon} />
+            <FontAwesome name="question-circle" size={24} color={COLORS.primary} style={styles.icon} />
             <Text style={styles.settingText}>Help & Policies</Text>
           </View>
           <FontAwesome name="chevron-right" size={16} color="#999" />
@@ -63,10 +64,10 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: COLORS.surface.primary,
   },
   section: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface.card,
     marginTop: 20,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -78,7 +79,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: COLORS.border,
   },
   settingLeft: {
     flexDirection: 'row',
@@ -86,9 +87,10 @@ const styles = StyleSheet.create({
   },
   icon: {
     marginRight: 16,
+    color: COLORS.primary,
   },
   settingText: {
     fontSize: 16,
-    color: '#333',
+    color: COLORS.text.white,
   },
 }); 

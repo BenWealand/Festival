@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
+import { COLORS } from '../constants/theme';
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
@@ -136,7 +137,7 @@ export default function ProfileScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#2089dc" />
+        <ActivityIndicator size="large" color={COLORS.text.white} />
       </View>
     );
   }
@@ -235,7 +236,7 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: COLORS.surface.primary,
     padding: 16,
   },
   loadingContainer: {
@@ -244,7 +245,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   section: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.surface.card,
     borderRadius: 8,
     padding: 16,
     marginBottom: 20,
@@ -252,16 +253,18 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#333',
+    color: COLORS.text.white,
     marginBottom: 8,
   },
   input: {
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: COLORS.border,
     borderRadius: 8,
     padding: 12,
     fontSize: 16,
     marginBottom: 16,
+    color: COLORS.text.white,
+    backgroundColor: COLORS.surface.secondary,
   },
   phoneContainer: {
     flexDirection: 'row',
@@ -275,7 +278,7 @@ const styles = StyleSheet.create({
     flex: 0.7,
   },
   button: {
-    backgroundColor: '#2089dc',
+    backgroundColor: COLORS.primary,
     padding: 16,
     borderRadius: 8,
     alignItems: 'center',
@@ -284,12 +287,12 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   buttonText: {
-    color: '#fff',
+    color: COLORS.text.white,
     fontSize: 16,
     fontWeight: '600',
   },
   logoutButton: {
-    backgroundColor: '#dc3545',
+    backgroundColor: '#FF0000',
     marginTop: 20,
   },
 }); 

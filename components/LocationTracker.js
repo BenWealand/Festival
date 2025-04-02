@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Platform, AppState } from 'react-native';
 import * as Location from 'expo-location';
+import { supabase } from '../lib/supabase';
+import { COLORS } from '../constants/theme';
 
 export default function LocationTracker() {
   const [location, setLocation] = useState(null);
@@ -54,7 +56,7 @@ export default function LocationTracker() {
         accuracy: Location.Accuracy.Balanced,
       });
       setLocation(location);
-      
+
       const formattedAddress = await getAddressFromCoordinates(
         location.coords.latitude,
         location.coords.longitude
@@ -148,9 +150,11 @@ export default function LocationTracker() {
       ) : errorMsg ? (
         <Text style={styles.errorText}>{errorMsg}</Text>
       ) : location ? (
-        <Text style={styles.text}>
-          Location: {address || 'Getting address...'}
-        </Text>
+        <View style={styles.locationContainer}>
+          <Text style={styles.text}>
+            Location: {address || 'Getting address...'}
+          </Text>
+        </View>
       ) : (
         <Text style={styles.text}>Getting location...</Text>
       )}
@@ -160,7 +164,7 @@ export default function LocationTracker() {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.background,
     padding: 15,
     borderRadius: 10,
     marginBottom: 20,
@@ -173,13 +177,17 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   text: {
     fontSize: 16,
-    color: '#333',
+    color: COLORS.text.white,
   },
   errorText: {
     fontSize: 16,
-    color: '#ff3b30',
+    color: COLORS.text.white,
   },
   permissionContainer: {
     flexDirection: 'row',
@@ -188,11 +196,11 @@ const styles = StyleSheet.create({
   },
   permissionText: {
     fontSize: 16,
-    color: '#333',
+    color: COLORS.text.white,
   },
   permissionLink: {
     fontSize: 16,
-    color: '#2089dc',
+    color: COLORS.text.white,
     textDecorationLine: 'underline',
   },
 }); 
