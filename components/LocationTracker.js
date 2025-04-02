@@ -37,11 +37,11 @@ export default function LocationTracker() {
       // First check if we can request permissions
       const { status: existingStatus } = await Location.getForegroundPermissionsAsync();
       
-      if (existingStatus === 'denied') {
-        // If permissions were previously denied, check if we can request them again
+      if (existingStatus !== 'granted') {
+        // Request permission if not already granted
         const { status: newStatus } = await Location.requestForegroundPermissionsAsync();
         
-        if (newStatus === 'denied') {
+        if (newStatus !== 'granted') {
           setPermanentlyDenied(true);
           setPermissionDenied(true);
           setErrorMsg('Location permissions are required to show your city and state');

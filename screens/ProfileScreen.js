@@ -1,27 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { useNavigation } from '@react-navigation/native';
 
 export default function ProfileScreen() {
+  const navigation = useNavigation();
   const [username, setUsername] = useState('');
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [middleName, setMiddleName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [suffix, setSuffix] = useState('');
+  const [countryCode, setCountryCode] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    getProfile();
+    fetchProfile();
   }, []);
 
-  async function getProfile() {
+  async function fetchProfile() {
     try {
-      setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
-      
       if (!user) throw new Error('No user found');
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('username, full_name')
+        .select('username, full_name, phone_number')
         .eq('id', user.id)
         .single();
 
@@ -29,7 +34,23 @@ export default function ProfileScreen() {
 
       if (data) {
         setUsername(data.username || '');
-        setFullName(data.full_name || '');
+        // Split full name into components
+        const nameParts = (data.full_name || '').split(' ');
+        setFirstName(nameParts[0] || '');
+        setLastName(nameParts[nameParts.length - 1] || '');
+        setMiddleName(nameParts.slice(1, -1).join(' ') || '');
+        setSuffix('');
+        
+        // Split phone number into country code and number
+        const phone = data.phone_number || '';
+        if (phone.startsWith('+')) {
+          const parts = phone.split(' ');
+          setCountryCode(parts[0] || '');
+          setPhoneNumber(parts.slice(1).join(' ') || '');
+        } else {
+          setCountryCode('+1');
+          setPhoneNumber(phone);
+        }
       }
     } catch (error) {
       Alert.alert('Error', error.message);
@@ -42,14 +63,24 @@ export default function ProfileScreen() {
     try {
       setSaving(true);
       const { data: { user } } = await supabase.auth.getUser();
-
       if (!user) throw new Error('No user found');
+
+      // Combine name parts
+      const fullName = [firstName, middleName, lastName, suffix]
+        .filter(Boolean)
+        .join(' ');
+
+      // Combine phone parts
+      const fullPhoneNumber = [countryCode, phoneNumber]
+        .filter(Boolean)
+        .join(' ');
 
       const updates = {
         id: user.id,
         username,
         full_name: fullName,
-        updated_at: new Date(),
+        phone_number: fullPhoneNumber,
+        updated_at: new Date().toISOString(),
       };
 
       const { error } = await supabase
@@ -58,7 +89,7 @@ export default function ProfileScreen() {
 
       if (error) throw error;
 
-      Alert.alert('Success', 'Profile updated successfully');
+      Alert.alert('Success', 'Profile updated successfully!');
     } catch (error) {
       Alert.alert('Error', error.message);
     } finally {
@@ -87,6 +118,11 @@ export default function ProfileScreen() {
                 throw error;
               }
               console.log('Logout successful');
+              // Navigate to the login screen after successful logout
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Login' }],
+              });
             } catch (error) {
               console.error('Logout error:', error);
               Alert.alert('Error', error.message);
@@ -99,43 +135,92 @@ export default function ProfileScreen() {
 
   if (loading) {
     return (
-      <View style={styles.container}>
-        <Text>Loading profile...</Text>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2089dc" />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <View style={styles.formContainer}>
+      <View style={styles.section}>
         <Text style={styles.label}>Username</Text>
         <TextInput
           style={styles.input}
+          placeholder="Username"
           value={username}
           onChangeText={setUsername}
-          placeholder="Enter username"
           autoCapitalize="none"
         />
 
-        <Text style={styles.label}>Full Name</Text>
+        <Text style={styles.label}>First Name</Text>
         <TextInput
           style={styles.input}
-          value={fullName}
-          onChangeText={setFullName}
-          placeholder="Enter full name"
+          placeholder="First Name"
+          value={firstName}
+          onChangeText={setFirstName}
           autoCapitalize="words"
         />
 
-        <TouchableOpacity 
-          style={[styles.button, saving && styles.buttonDisabled]}
-          onPress={updateProfile}
-          disabled={saving}
-        >
-          <Text style={styles.buttonText}>
-            {saving ? 'Saving...' : 'Save Changes'}
-          </Text>
-        </TouchableOpacity>
+        <Text style={styles.label}>Middle Name</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Middle Name"
+          value={middleName}
+          onChangeText={setMiddleName}
+          autoCapitalize="words"
+        />
+
+        <Text style={styles.label}>Last Name</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Last Name"
+          value={lastName}
+          onChangeText={setLastName}
+          autoCapitalize="words"
+        />
+
+        <Text style={styles.label}>Suffix</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="Suffix (Jr., Sr., III, etc.)"
+          value={suffix}
+          onChangeText={setSuffix}
+          autoCapitalize="words"
+        />
+
+        <Text style={styles.label}>Phone Number</Text>
+        <View style={styles.phoneContainer}>
+          <TextInput
+            style={[styles.input, styles.countryCode]}
+            placeholder="+1"
+            value={countryCode}
+            onChangeText={setCountryCode}
+            keyboardType="phone-pad"
+            autoCapitalize="none"
+          />
+          <TextInput
+            style={[styles.input, styles.phoneNumber]}
+            placeholder="Phone Number"
+            value={phoneNumber}
+            onChangeText={setPhoneNumber}
+            keyboardType="phone-pad"
+            autoCapitalize="none"
+          />
+        </View>
       </View>
+
+      <TouchableOpacity 
+        style={[styles.button, saving && styles.buttonDisabled]}
+        onPress={updateProfile}
+        disabled={saving}
+      >
+        {saving ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.buttonText}>Save Changes</Text>
+        )}
+      </TouchableOpacity>
 
       <TouchableOpacity 
         style={[styles.button, styles.logoutButton]}
@@ -150,48 +235,56 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
     backgroundColor: '#f5f5f5',
+    padding: 16,
   },
-  formContainer: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 10,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  section: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 20,
   },
   label: {
     fontSize: 16,
     fontWeight: '600',
-    marginBottom: 8,
     color: '#333',
+    marginBottom: 8,
   },
   input: {
     borderWidth: 1,
     borderColor: '#ddd',
+    borderRadius: 8,
     padding: 12,
-    borderRadius: 6,
-    marginBottom: 16,
     fontSize: 16,
+    marginBottom: 16,
+  },
+  phoneContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  countryCode: {
+    flex: 0.3,
+  },
+  phoneNumber: {
+    flex: 0.7,
   },
   button: {
     backgroundColor: '#2089dc',
-    padding: 15,
-    borderRadius: 6,
+    padding: 16,
+    borderRadius: 8,
     alignItems: 'center',
-    marginTop: 10,
   },
   buttonDisabled: {
-    backgroundColor: '#a0a0a0',
+    opacity: 0.7,
   },
   buttonText: {
-    color: 'white',
+    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },

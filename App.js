@@ -16,6 +16,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import BalanceScreen from './screens/BalanceScreen';
 import InboxScreen from './screens/InboxScreen';
 import ProfileScreen from './screens/ProfileScreen';
+import NotificationSettingsScreen from './screens/NotificationSettingsScreen';
 
 // App State for session refresh
 import { AppState } from 'react-native';
@@ -131,6 +132,22 @@ function MainNavigator() {
               </TouchableOpacity>
               <FontAwesome name="cog" size={24} color="#fff" style={styles.headerScreenIcon} />
             </View>
+          ),
+        })}
+      />
+      <Drawer.Screen 
+        name="NotificationSettings" 
+        component={NotificationSettingsScreen}
+        options={({ navigation }) => ({
+          title: 'Notification Settings',
+          drawerItemStyle: { display: 'none' },
+          headerLeft: () => (
+            <TouchableOpacity 
+              onPress={() => navigation.goBack()}
+              style={styles.headerIconContainer}
+            >
+              <FontAwesome name="arrow-left" size={24} color="#fff" />
+            </TouchableOpacity>
           ),
         })}
       />
