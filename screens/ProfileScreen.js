@@ -15,13 +15,70 @@ export default function ProfileScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState({});
 
   useEffect(() => {
     fetchProfile();
+    
+    // Subscribe to profile changes
+    const subscription = supabase
+      .channel('profile_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'profiles',
+        },
+        (payload) => {
+          if (payload.new) {
+            updateLocalProfile(payload.new);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
+
+  const updateLocalProfile = (data) => {
+    setUsername(data.username || '');
+    const nameParts = (data.full_name || '').split(' ');
+    setFirstName(nameParts[0] || '');
+    setLastName(nameParts[nameParts.length - 1] || '');
+    setMiddleName(nameParts.slice(1, -1).join(' ') || '');
+    setSuffix('');
+    
+    // Handle phone number with country code
+    const phone = data.phone_number || '';
+    if (phone) {
+      // If phone starts with +, extract country code
+      if (phone.startsWith('+')) {
+        const spaceIndex = phone.indexOf(' ');
+        if (spaceIndex !== -1) {
+          setCountryCode(phone.substring(0, spaceIndex));
+          setPhoneNumber(phone.substring(spaceIndex + 1));
+        } else {
+          // If no space, assume first 3 digits are country code
+          setCountryCode(phone.substring(0, 3));
+          setPhoneNumber(phone.substring(3));
+        }
+      } else {
+        // Default to US country code if no + present
+        setCountryCode('+1');
+        setPhoneNumber(phone);
+      }
+    } else {
+      setCountryCode('+1');
+      setPhoneNumber('');
+    }
+  };
 
   async function fetchProfile() {
     try {
+      setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('No user found');
 
@@ -34,47 +91,47 @@ export default function ProfileScreen() {
       if (error) throw error;
 
       if (data) {
-        setUsername(data.username || '');
-        // Split full name into components
-        const nameParts = (data.full_name || '').split(' ');
-        setFirstName(nameParts[0] || '');
-        setLastName(nameParts[nameParts.length - 1] || '');
-        setMiddleName(nameParts.slice(1, -1).join(' ') || '');
-        setSuffix('');
-        
-        // Split phone number into country code and number
-        const phone = data.phone_number || '';
-        if (phone.startsWith('+')) {
-          const parts = phone.split(' ');
-          setCountryCode(parts[0] || '');
-          setPhoneNumber(parts.slice(1).join(' ') || '');
-        } else {
-          setCountryCode('+1');
-          setPhoneNumber(phone);
-        }
+        updateLocalProfile(data);
       }
     } catch (error) {
-      Alert.alert('Error', error.message);
+      console.error('Error fetching profile:', error);
+      Alert.alert('Error', 'Failed to load profile. Please try again.');
     } finally {
       setLoading(false);
     }
   }
 
+  const validateFields = () => {
+    const errors = {};
+    if (!username.trim()) errors.username = 'Username is required';
+    if (!firstName.trim()) errors.firstName = 'First name is required';
+    if (!lastName.trim()) errors.lastName = 'Last name is required';
+    if (!phoneNumber.trim()) errors.phoneNumber = 'Phone number is required';
+    
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   async function updateProfile() {
+    if (!validateFields()) {
+      return;
+    }
+
     try {
       setSaving(true);
-      const { data: { user } } = await supabase.auth.getUser();
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError) throw userError;
       if (!user) throw new Error('No user found');
 
-      // Combine name parts
+      console.log('Current user ID:', user.id);
+
       const fullName = [firstName, middleName, lastName, suffix]
         .filter(Boolean)
         .join(' ');
 
-      // Combine phone parts
-      const fullPhoneNumber = [countryCode, phoneNumber]
-        .filter(Boolean)
-        .join(' ');
+      // Ensure country code is properly formatted
+      const formattedCountryCode = countryCode.startsWith('+') ? countryCode : `+${countryCode}`;
+      const fullPhoneNumber = `${formattedCountryCode} ${phoneNumber}`.trim();
 
       const updates = {
         id: user.id,
@@ -84,15 +141,47 @@ export default function ProfileScreen() {
         updated_at: new Date().toISOString(),
       };
 
-      const { error } = await supabase
+      console.log('Attempting to save profile with data:', updates);
+
+      // First check if the profile exists
+      const { data: existingProfile, error: checkError } = await supabase
         .from('profiles')
-        .upsert(updates);
+        .select('id')
+        .eq('id', user.id)
+        .single();
 
-      if (error) throw error;
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 is "not found" error
+        console.error('Error checking profile:', checkError);
+        throw checkError;
+      }
 
+      let result;
+      if (existingProfile) {
+        // Update existing profile
+        result = await supabase
+          .from('profiles')
+          .update(updates)
+          .eq('id', user.id);
+      } else {
+        // Insert new profile
+        result = await supabase
+          .from('profiles')
+          .insert(updates);
+      }
+
+      if (result.error) {
+        console.error('Error saving profile:', result.error);
+        throw result.error;
+      }
+
+      console.log('Profile saved successfully:', result.data);
       Alert.alert('Success', 'Profile updated successfully!');
     } catch (error) {
-      Alert.alert('Error', error.message);
+      console.error('Error updating profile:', error);
+      Alert.alert(
+        'Error',
+        `Failed to update profile: ${error.message}\n\nPlease check your internet connection and try again.`
+      );
     } finally {
       setSaving(false);
     }
@@ -147,21 +236,23 @@ export default function ProfileScreen() {
       <View style={styles.section}>
         <Text style={styles.label}>Username</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, fieldErrors.username && styles.inputError]}
           placeholder="Username"
           value={username}
           onChangeText={setUsername}
           autoCapitalize="none"
         />
+        {fieldErrors.username && <Text style={styles.errorText}>{fieldErrors.username}</Text>}
 
         <Text style={styles.label}>First Name</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, fieldErrors.firstName && styles.inputError]}
           placeholder="First Name"
           value={firstName}
           onChangeText={setFirstName}
           autoCapitalize="words"
         />
+        {fieldErrors.firstName && <Text style={styles.errorText}>{fieldErrors.firstName}</Text>}
 
         <Text style={styles.label}>Middle Name</Text>
         <TextInput
@@ -174,12 +265,13 @@ export default function ProfileScreen() {
 
         <Text style={styles.label}>Last Name</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, fieldErrors.lastName && styles.inputError]}
           placeholder="Last Name"
           value={lastName}
           onChangeText={setLastName}
           autoCapitalize="words"
         />
+        {fieldErrors.lastName && <Text style={styles.errorText}>{fieldErrors.lastName}</Text>}
 
         <Text style={styles.label}>Suffix</Text>
         <TextInput
@@ -196,12 +288,16 @@ export default function ProfileScreen() {
             style={[styles.input, styles.countryCode]}
             placeholder="+1"
             value={countryCode}
-            onChangeText={setCountryCode}
+            onChangeText={(text) => {
+              // Ensure country code starts with +
+              const formattedText = text.startsWith('+') ? text : `+${text}`;
+              setCountryCode(formattedText);
+            }}
             keyboardType="phone-pad"
             autoCapitalize="none"
           />
           <TextInput
-            style={[styles.input, styles.phoneNumber]}
+            style={[styles.input, styles.phoneNumber, fieldErrors.phoneNumber && styles.inputError]}
             placeholder="Phone Number"
             value={phoneNumber}
             onChangeText={setPhoneNumber}
@@ -209,6 +305,7 @@ export default function ProfileScreen() {
             autoCapitalize="none"
           />
         </View>
+        {fieldErrors.phoneNumber && <Text style={styles.errorText}>{fieldErrors.phoneNumber}</Text>}
       </View>
 
       <TouchableOpacity 
@@ -269,13 +366,12 @@ const styles = StyleSheet.create({
   phoneContainer: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 16,
   },
   countryCode: {
-    flex: 0.3,
+    width: 80,
   },
   phoneNumber: {
-    flex: 0.7,
+    flex: 1,
   },
   button: {
     backgroundColor: COLORS.primary,
@@ -294,5 +390,14 @@ const styles = StyleSheet.create({
   logoutButton: {
     backgroundColor: '#FF0000',
     marginTop: 20,
+  },
+  inputError: {
+    borderColor: COLORS.error,
+    borderWidth: 1,
+  },
+  errorText: {
+    color: COLORS.error,
+    fontSize: 12,
+    marginTop: 4,
   },
 }); 

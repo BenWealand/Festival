@@ -6,7 +6,6 @@ import { createDrawerNavigator } from '@react-navigation/drawer';
 import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
 import { supabase } from './lib/supabase';
 import Auth from './components/Auth';
-import * as Font from 'expo-font';
 import { FontAwesome } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { COLORS } from './constants/theme';
@@ -99,7 +98,7 @@ function MainNavigator() {
       <Drawer.Screen 
         name="Profile" 
         component={ProfileScreen}
-        options={({ navigation }) => ({
+        options={{
           title: 'Profile',
           drawerIcon: ({ color, size }) => (
             <FontAwesome name="user" size={size} color={color} />
@@ -115,12 +114,12 @@ function MainNavigator() {
               <FontAwesome name="user" size={24} color={COLORS.text.white} style={styles.headerScreenIcon} />
             </View>
           ),
-        })}
+        }}
       />
       <Drawer.Screen 
         name="Settings" 
         component={SettingsScreen}
-        options={({ navigation }) => ({
+        options={{
           title: 'Settings',
           drawerIcon: ({ color, size }) => (
             <FontAwesome name="cog" size={size} color={color} />
@@ -136,7 +135,7 @@ function MainNavigator() {
               <FontAwesome name="cog" size={24} color={COLORS.text.white} style={styles.headerScreenIcon} />
             </View>
           ),
-        })}
+        }}
       />
       <Drawer.Screen 
         name="NotificationSettings" 
@@ -203,80 +202,35 @@ function MainNavigator() {
 export default function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [fontsLoaded, setFontsLoaded] = useState(false);
 
   useEffect(() => {
-    async function loadFonts() {
-      try {
-        await Font.loadAsync({
-          ...FontAwesome.font,
-        });
-        setFontsLoaded(true);
-      } catch (e) {
-        console.error('Error loading fonts:', e);
-        setError(e.message);
-      }
-    }
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
 
-    async function initializeApp() {
-      try {
-        // Get initial session
-        const { data, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) {
-          console.error('Session error:', sessionError);
-          setError(sessionError.message);
-        }
-        setSession(data?.session);
-        setLoading(false);
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
 
-        // Listen for auth changes
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-          console.log('Auth state changed:', _event, session ? 'session exists' : 'no session');
-          setSession(session);
-          setLoading(false);
-        });
-
-        return () => subscription.unsubscribe();
-      } catch (e) {
-        console.error('Initialization error:', e);
-        setError(e.message || 'An unknown error occurred');
-        setLoading(false);
-      }
-    }
-
-    Promise.all([loadFonts(), initializeApp()]);
+    return () => subscription.unsubscribe();
   }, []);
 
-  if (loading || !fontsLoaded) {
+  if (loading) {
     return (
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.text.white} />
-          <Text style={styles.loadingText}>Loading...</Text>
-        </View>
-      </GestureHandlerRootView>
-    );
-  }
-
-  if (error) {
-    return (
-      <GestureHandlerRootView style={{ flex: 1 }}>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Error: {error}</Text>
-        </View>
-      </GestureHandlerRootView>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.text.white} />
+        <Text style={styles.loadingText}>Loading...</Text>
+      </View>
     );
   }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <NavigationContainer>
-        {session && session.user ? (
-          <MainNavigator />
-        ) : (
-          <Auth />
-        )}
+        {session ? <MainNavigator /> : <Auth />}
       </NavigationContainer>
     </GestureHandlerRootView>
   );
