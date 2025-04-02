@@ -34,7 +34,7 @@ function MainNavigator() {
   return (
     <Drawer.Navigator 
       initialRouteName="Home"
-      screenOptions={({ navigation }) => ({
+      screenOptions={({ navigation, route }) => ({
         headerStyle: {
           backgroundColor: COLORS.primary,
         },
@@ -58,25 +58,13 @@ function MainNavigator() {
         headerLeft: () => (
           <View style={styles.headerLeftContainer}>
             <TouchableOpacity 
-              onPress={() => {
-                console.log('Menu button pressed');
-                try {
-                  navigation.openDrawer();
-                  console.log('Drawer opened successfully');
-                } catch (error) {
-                  console.error('Error opening drawer:', error);
-                }
-              }}
+              onPress={() => navigation.openDrawer()}
               style={styles.headerIconContainer}
             >
-              <FontAwesome 
-                name="bars" 
-                size={24} 
-                color={COLORS.text.white} 
-              />
+              <FontAwesome name="bars" size={24} color={COLORS.text.white} />
             </TouchableOpacity>
             <FontAwesome 
-              name="home" 
+              name={getScreenIcon(route.name)} 
               size={24} 
               color={COLORS.text.white} 
               style={styles.headerScreenIcon}
@@ -103,17 +91,6 @@ function MainNavigator() {
           drawerIcon: ({ color, size }) => (
             <FontAwesome name="user" size={size} color={color} />
           ),
-          headerLeft: () => (
-            <View style={styles.headerLeftContainer}>
-              <TouchableOpacity 
-                onPress={() => navigation.openDrawer()}
-                style={styles.headerIconContainer}
-              >
-                <FontAwesome name="bars" size={24} color={COLORS.text.white} />
-              </TouchableOpacity>
-              <FontAwesome name="user" size={24} color={COLORS.text.white} style={styles.headerScreenIcon} />
-            </View>
-          ),
         }}
       />
       <Drawer.Screen 
@@ -124,16 +101,25 @@ function MainNavigator() {
           drawerIcon: ({ color, size }) => (
             <FontAwesome name="cog" size={size} color={color} />
           ),
-          headerLeft: () => (
-            <View style={styles.headerLeftContainer}>
-              <TouchableOpacity 
-                onPress={() => navigation.openDrawer()}
-                style={styles.headerIconContainer}
-              >
-                <FontAwesome name="bars" size={24} color={COLORS.text.white} />
-              </TouchableOpacity>
-              <FontAwesome name="cog" size={24} color={COLORS.text.white} style={styles.headerScreenIcon} />
-            </View>
+        }}
+      />
+      <Drawer.Screen 
+        name="Balance" 
+        component={BalanceScreen}
+        options={{
+          title: 'Balance',
+          drawerIcon: ({ color, size }) => (
+            <FontAwesome name="money" size={size} color={color} />
+          ),
+        }}
+      />
+      <Drawer.Screen 
+        name="Inbox" 
+        component={InboxScreen}
+        options={{
+          title: 'Inbox',
+          drawerIcon: ({ color, size }) => (
+            <FontAwesome name="envelope" size={size} color={color} />
           ),
         }}
       />
@@ -145,7 +131,7 @@ function MainNavigator() {
           drawerItemStyle: { display: 'none' },
           headerLeft: () => (
             <TouchableOpacity 
-              onPress={() => navigation.goBack()}
+              onPress={() => navigation.navigate('Settings')}
               style={styles.headerIconContainer}
             >
               <FontAwesome name="arrow-left" size={24} color={COLORS.text.white} />
@@ -153,51 +139,29 @@ function MainNavigator() {
           ),
         })}
       />
-      <Drawer.Screen 
-        name="Balance" 
-        component={BalanceScreen}
-        options={({ navigation }) => ({
-          title: 'Balance',
-          drawerIcon: ({ color, size }) => (
-            <FontAwesome name="money" size={size} color={color} />
-          ),
-          headerLeft: () => (
-            <View style={styles.headerLeftContainer}>
-              <TouchableOpacity 
-                onPress={() => navigation.openDrawer()}
-                style={styles.headerIconContainer}
-              >
-                <FontAwesome name="bars" size={24} color={COLORS.text.white} />
-              </TouchableOpacity>
-              <FontAwesome name="money" size={24} color={COLORS.text.white} style={styles.headerScreenIcon} />
-            </View>
-          ),
-        })}
-      />
-      <Drawer.Screen 
-        name="Inbox" 
-        component={InboxScreen}
-        options={({ navigation }) => ({
-          title: 'Inbox',
-          drawerIcon: ({ color, size }) => (
-            <FontAwesome name="envelope" size={size} color={color} />
-          ),
-          headerLeft: () => (
-            <View style={styles.headerLeftContainer}>
-              <TouchableOpacity 
-                onPress={() => navigation.openDrawer()}
-                style={styles.headerIconContainer}
-              >
-                <FontAwesome name="bars" size={24} color={COLORS.text.white} />
-              </TouchableOpacity>
-              <FontAwesome name="envelope" size={24} color={COLORS.text.white} style={styles.headerScreenIcon} />
-            </View>
-          ),
-        })}
-      />
     </Drawer.Navigator>
   );
 }
+
+// Helper function to get the appropriate icon for each screen
+const getScreenIcon = (screenName) => {
+  switch (screenName) {
+    case 'Home':
+      return 'home';
+    case 'Profile':
+      return 'user';
+    case 'Settings':
+      return 'cog';
+    case 'Balance':
+      return 'money';
+    case 'Inbox':
+      return 'envelope';
+    case 'NotificationSettings':
+      return 'bell';
+    default:
+      return 'circle';
+  }
+};
 
 export default function App() {
   const [session, setSession] = useState(null);

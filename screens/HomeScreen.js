@@ -14,23 +14,65 @@ export default function HomeScreen() {
     const fetchLocations = async () => {
       try {
         setLoading(true);
+        console.log('Starting to fetch locations...');
+        
         const { data, error } = await supabase
           .from('locations')
-          .select('id, name, logo_url')
+          .select('id, name, logo_url, points')
           .order('id', { ascending: true });
 
-        if (error) throw error;
+        console.log('Raw Supabase response:', { data, error });
+        
+        if (error) {
+          console.error('Supabase error details:', {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code
+          });
+          throw error;
+        }
 
+        console.log('Processed locations data:', data);
         setLocations(data || []);
       } catch (error) {
         console.error('Error fetching locations:', error.message);
-        setError('Failed to load locations');
+        setError(`Failed to load locations: ${error.message}`);
       } finally {
         setLoading(false);
       }
     };
 
     fetchLocations();
+
+    // Set up real-time subscription
+    const subscription = supabase
+      .channel('locations_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'locations',
+        },
+        (payload) => {
+          console.log('Location change detected:', payload);
+          if (payload.eventType === 'INSERT') {
+            setLocations(prev => [...prev, payload.new]);
+          } else if (payload.eventType === 'UPDATE') {
+            setLocations(prev => prev.map(loc => 
+              loc.id === payload.new.id ? payload.new : loc
+            ));
+          } else if (payload.eventType === 'DELETE') {
+            setLocations(prev => prev.filter(loc => loc.id !== payload.old.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (loading) {
@@ -46,6 +88,12 @@ export default function HomeScreen() {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity 
+          style={styles.retryButton}
+          onPress={() => setLoading(true)}
+        >
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -55,30 +103,43 @@ export default function HomeScreen() {
       <LocationTracker />
       
       <View style={styles.locationsContainer}>
-        {locations.map((location) => (
-          <TouchableOpacity key={location.id} style={styles.locationBox}>
-            <View style={styles.logoContainer}>
-              {location.logo_url ? (
-                <Image 
-                  source={{ uri: location.logo_url }} 
-                  style={styles.logo}
-                  resizeMode="cover"
-                />
-              ) : (
-                <View style={styles.logoCircle} />
-              )}
-            </View>
-            
-            <View style={styles.locationInfo}>
-              <Text style={styles.locationText}>{location.name}</Text>
-            </View>
-            
-            <View style={styles.pointsContainer}>
-              <Text style={styles.pointsNumber}>123</Text>
-              <Text style={styles.pointsLabel}>points</Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+        {locations.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <FontAwesome name="map-marker" size={48} color={COLORS.text.muted} />
+            <Text style={styles.emptyText}>No locations available</Text>
+          </View>
+        ) : (
+          locations.map((location) => (
+            <TouchableOpacity 
+              key={location.id} 
+              style={styles.locationBox}
+              onPress={() => console.log('Location pressed:', location.id)}
+            >
+              <View style={styles.logoContainer}>
+                {location.logo_url ? (
+                  <Image 
+                    source={{ uri: location.logo_url }} 
+                    style={styles.logo}
+                    resizeMode="cover"
+                  />
+                ) : (
+                  <View style={styles.logoCircle}>
+                    <FontAwesome name="building" size={24} color={COLORS.text.white} />
+                  </View>
+                )}
+              </View>
+              
+              <View style={styles.locationInfo}>
+                <Text style={styles.locationText}>{location.name}</Text>
+              </View>
+              
+              <View style={styles.pointsContainer}>
+                <Text style={styles.pointsNumber}>{location.points || 0}</Text>
+                <Text style={styles.pointsLabel}>points</Text>
+              </View>
+            </TouchableOpacity>
+          ))
+        )}
       </View>
     </ScrollView>
   );
@@ -109,9 +170,32 @@ const styles = StyleSheet.create({
     color: COLORS.text.white,
     fontSize: 16,
     textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: COLORS.primary,
+    padding: 12,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  retryButtonText: {
+    color: COLORS.text.white,
+    fontSize: 16,
+    fontWeight: '600',
   },
   locationsContainer: {
     padding: 16,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  emptyText: {
+    color: COLORS.text.muted,
+    fontSize: 16,
+    marginTop: 16,
   },
   locationBox: {
     flexDirection: 'row',
@@ -145,6 +229,8 @@ const styles = StyleSheet.create({
     height: 40,
     borderRadius: 20,
     backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   locationInfo: {
     flex: 1,
