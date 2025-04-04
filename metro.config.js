@@ -4,6 +4,15 @@ const config = getDefaultConfig(__dirname);
 
 module.exports = {
   ...config,
+  transformer: {
+    ...config.transformer,
+    getTransformOptions: async () => ({
+      transform: {
+        experimentalImportSupport: false,
+        inlineRequires: true,
+      },
+    }),
+  },
   resolver: {
     ...config.resolver,
     sourceExts: [...config.resolver.sourceExts, 'mjs'],
@@ -14,5 +23,16 @@ module.exports = {
       'jpg',
       'reanimated'
     ],
+  },
+  server: {
+    ...config.server,
+    enhanceMiddleware: (middleware) => {
+      return (req, res, next) => {
+        if (req.url.endsWith('.bundle')) {
+          res.setHeader('Content-Type', 'application/javascript');
+        }
+        return middleware(req, res, next);
+      };
+    },
   },
 };

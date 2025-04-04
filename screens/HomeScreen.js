@@ -4,11 +4,13 @@ import LocationTracker from '../components/LocationTracker';
 import { FontAwesome } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { COLORS } from '../constants/theme';
+import { useAuth } from '../context/AuthContext';
 
 export default function HomeScreen() {
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchLocations = async () => {
@@ -16,9 +18,32 @@ export default function HomeScreen() {
         setLoading(true);
         console.log('Starting to fetch locations...');
         
+        // First get the user's profile
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', user?.id)
+          .single();
+
+        if (profileError) {
+          console.error('Error fetching profile:', profileError);
+          throw profileError;
+        }
+
+        console.log('Profile:', profile);
+
+        // Then fetch locations with their balances
         const { data, error } = await supabase
           .from('locations')
-          .select('id, name, logo_url, points')
+          .select(`
+            id,
+            name,
+            logo_url,
+            balances!inner (
+              balance
+            )
+          `)
+          .eq('balances.user_id', profile.id)
           .order('id', { ascending: true });
 
         console.log('Raw Supabase response:', { data, error });
@@ -33,8 +58,16 @@ export default function HomeScreen() {
           throw error;
         }
 
-        console.log('Processed locations data:', data);
-        setLocations(data || []);
+        // Transform the data to match our expected format
+        const transformedData = data.map(location => ({
+          id: location.id,
+          name: location.name,
+          logo_url: location.logo_url,
+          points: location.balances[0]?.balance || 0
+        }));
+
+        console.log('Processed locations data:', transformedData);
+        setLocations(transformedData);
       } catch (error) {
         console.error('Error fetching locations:', error.message);
         setError(`Failed to load locations: ${error.message}`);
@@ -43,10 +76,12 @@ export default function HomeScreen() {
       }
     };
 
-    fetchLocations();
+    if (user) {
+      fetchLocations();
+    }
 
-    // Set up real-time subscription
-    const subscription = supabase
+    // Set up real-time subscription for both locations and balances
+    const locationsSubscription = supabase
       .channel('locations_changes')
       .on(
         'postgres_changes',
@@ -55,25 +90,40 @@ export default function HomeScreen() {
           schema: 'public',
           table: 'locations',
         },
-        (payload) => {
+        async (payload) => {
           console.log('Location change detected:', payload);
-          if (payload.eventType === 'INSERT') {
-            setLocations(prev => [...prev, payload.new]);
-          } else if (payload.eventType === 'UPDATE') {
-            setLocations(prev => prev.map(loc => 
-              loc.id === payload.new.id ? payload.new : loc
-            ));
-          } else if (payload.eventType === 'DELETE') {
-            setLocations(prev => prev.filter(loc => loc.id !== payload.old.id));
+          // When a location changes, refetch all data to ensure balances are up to date
+          if (user) {
+            fetchLocations();
+          }
+        }
+      )
+      .subscribe();
+
+    const balancesSubscription = supabase
+      .channel('balances_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'balances',
+        },
+        async (payload) => {
+          console.log('Balance change detected:', payload);
+          // When a balance changes, refetch all data
+          if (user) {
+            fetchLocations();
           }
         }
       )
       .subscribe();
 
     return () => {
-      subscription.unsubscribe();
+      locationsSubscription.unsubscribe();
+      balancesSubscription.unsubscribe();
     };
-  }, []);
+  }, [user]);
 
   if (loading) {
     return (
@@ -134,7 +184,7 @@ export default function HomeScreen() {
               </View>
               
               <View style={styles.pointsContainer}>
-                <Text style={styles.pointsNumber}>{location.points || 0}</Text>
+                <Text style={styles.pointsNumber}>{location.points}</Text>
                 <Text style={styles.pointsLabel}>points</Text>
               </View>
             </TouchableOpacity>
@@ -154,6 +204,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: COLORS.surface.primary,
   },
   loadingText: {
     marginTop: 10,
@@ -165,6 +216,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: COLORS.surface.primary,
   },
   errorText: {
     color: COLORS.text.white,

@@ -1,14 +1,20 @@
-import 'react-native-gesture-handler';
-import 'react-native-reanimated';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, Platform } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createDrawerNavigator } from '@react-navigation/drawer';
-import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native';
-import { supabase } from './lib/supabase';
-import Auth from './components/Auth';
+import { createStackNavigator } from '@react-navigation/stack';
 import { FontAwesome } from '@expo/vector-icons';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { supabase } from './lib/supabase';
 import { COLORS } from './constants/theme';
+import { AuthProvider } from './context/AuthContext';
+import CustomDrawer from './components/CustomDrawer';
+import Auth from './components/Auth';
+
+import Animated from 'react-native-reanimated';
+
+console.log("👀 Reanimated:", Animated);
+
 
 // Import screens
 import HomeScreen from './screens/HomeScreen';
@@ -29,57 +35,112 @@ AppState.addEventListener('change', (state) => {
 });
 
 const Drawer = createDrawerNavigator();
+const Stack = createStackNavigator();
 
-function MainNavigator() {
+// Helper function to get the appropriate icon for each screen
+const getScreenIcon = (routeName) => {
+  switch (routeName) {
+    case 'Home':
+      return 'home';
+    case 'Profile':
+      return 'user';
+    case 'Settings':
+      return 'cog';
+    case 'Balance':
+      return 'money';
+    case 'Inbox':
+      return 'envelope';
+    case 'NotificationSettings':
+      return 'bell';
+    default:
+      return 'circle';
+  }
+};
+
+// Web Navigation
+function WebNavigator() {
   return (
-    <Drawer.Navigator 
-      initialRouteName="Home"
-      screenOptions={({ navigation, route }) => ({
+    <Stack.Navigator
+      screenOptions={({ route, navigation }) => ({
         headerStyle: {
-          backgroundColor: COLORS.primary,
+          backgroundColor: COLORS.surface.primary,
         },
         headerTintColor: COLORS.text.white,
         headerTitleStyle: {
-          display: 'none',
+          fontWeight: 'bold',
         },
-        drawerStyle: {
-          width: 300,
-          backgroundColor: COLORS.surface.primary,
-        },
-        drawerLabelStyle: {
-          fontSize: 16,
-          color: COLORS.text.white,
-        },
-        drawerItemStyle: {
-          paddingVertical: 8,
-        },
-        drawerActiveTintColor: COLORS.text.white,
-        drawerInactiveTintColor: COLORS.text.white,
         headerLeft: () => (
           <View style={styles.headerLeftContainer}>
             <TouchableOpacity 
-              onPress={() => navigation.openDrawer()}
+              onPress={() => navigation.goBack()}
               style={styles.headerIconContainer}
             >
+              <FontAwesome 
+                name={getScreenIcon(route.name)} 
+                size={24} 
+                color={COLORS.text.white} 
+              />
+            </TouchableOpacity>
+          </View>
+        ),
+      })}
+    >
+      <Stack.Screen name="Home" component={HomeScreen} />
+      <Stack.Screen name="Profile" component={ProfileScreen} />
+      <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="Balance" component={BalanceScreen} />
+      <Stack.Screen name="Inbox" component={InboxScreen} />
+      <Stack.Screen 
+        name="NotificationSettings" 
+        component={NotificationSettingsScreen}
+        options={{
+          title: 'Notification Settings',
+        }}
+      />
+    </Stack.Navigator>
+  );
+}
+
+// Mobile Navigation
+function MobileNavigator() {
+  return (
+    <Drawer.Navigator
+      drawerContent={(props) => <CustomDrawer {...props} />}
+      screenOptions={({ route, navigation }) => ({
+        headerStyle: {
+          backgroundColor: COLORS.surface.primary,
+        },
+        headerTintColor: COLORS.text.white,
+        headerTitleStyle: {
+          fontWeight: 'bold',
+        },
+        headerLeft: () => (
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 15 }}>
+            <TouchableOpacity onPress={() => navigation.toggleDrawer()}>
               <FontAwesome name="bars" size={24} color={COLORS.text.white} />
             </TouchableOpacity>
             <FontAwesome 
               name={getScreenIcon(route.name)} 
               size={24} 
               color={COLORS.text.white} 
-              style={styles.headerScreenIcon}
+              style={{ marginLeft: 15 }}
             />
           </View>
         ),
+        drawerStyle: {
+          backgroundColor: COLORS.surface.primary,
+          width: 240,
+        },
+        drawerActiveTintColor: COLORS.text.white,
+        drawerInactiveTintColor: COLORS.text.muted,
       })}
     >
       <Drawer.Screen 
         name="Home" 
         component={HomeScreen}
         options={{
-          title: 'Home',
-          drawerIcon: ({ color, size }) => (
-            <FontAwesome name="home" size={size} color={color} />
+          drawerIcon: ({ color }) => (
+            <FontAwesome name="home" size={24} color={color} />
           ),
         }}
       />
@@ -87,9 +148,8 @@ function MainNavigator() {
         name="Profile" 
         component={ProfileScreen}
         options={{
-          title: 'Profile',
-          drawerIcon: ({ color, size }) => (
-            <FontAwesome name="user" size={size} color={color} />
+          drawerIcon: ({ color }) => (
+            <FontAwesome name="user" size={24} color={color} />
           ),
         }}
       />
@@ -97,9 +157,8 @@ function MainNavigator() {
         name="Settings" 
         component={SettingsScreen}
         options={{
-          title: 'Settings',
-          drawerIcon: ({ color, size }) => (
-            <FontAwesome name="cog" size={size} color={color} />
+          drawerIcon: ({ color }) => (
+            <FontAwesome name="cog" size={24} color={color} />
           ),
         }}
       />
@@ -108,8 +167,8 @@ function MainNavigator() {
         component={BalanceScreen}
         options={{
           title: 'Balance',
-          drawerIcon: ({ color, size }) => (
-            <FontAwesome name="money" size={size} color={color} />
+          drawerIcon: ({ color }) => (
+            <FontAwesome name="money" size={24} color={color} />
           ),
         }}
       />
@@ -118,8 +177,8 @@ function MainNavigator() {
         component={InboxScreen}
         options={{
           title: 'Inbox',
-          drawerIcon: ({ color, size }) => (
-            <FontAwesome name="envelope" size={size} color={color} />
+          drawerIcon: ({ color }) => (
+            <FontAwesome name="envelope" size={24} color={color} />
           ),
         }}
       />
@@ -143,25 +202,13 @@ function MainNavigator() {
   );
 }
 
-// Helper function to get the appropriate icon for each screen
-const getScreenIcon = (screenName) => {
-  switch (screenName) {
-    case 'Home':
-      return 'home';
-    case 'Profile':
-      return 'user';
-    case 'Settings':
-      return 'cog';
-    case 'Balance':
-      return 'money';
-    case 'Inbox':
-      return 'envelope';
-    case 'NotificationSettings':
-      return 'bell';
-    default:
-      return 'circle';
+// Main Navigator that switches between web and mobile
+function MainNavigator() {
+  if (Platform.OS === 'web') {
+    return <WebNavigator />;
   }
-};
+  return <MobileNavigator />;
+}
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -192,15 +239,20 @@ export default function App() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <NavigationContainer>
-        {session ? <MainNavigator /> : <Auth />}
-      </NavigationContainer>
+    <GestureHandlerRootView style={styles.container}>
+      <AuthProvider>
+        <NavigationContainer>
+          {session ? <MainNavigator /> : <Auth />}
+        </NavigationContainer>
+      </AuthProvider>
     </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
@@ -227,6 +279,7 @@ const styles = StyleSheet.create({
   headerLeftContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginLeft: 15,
   },
   headerIconContainer: {
     padding: 8,
