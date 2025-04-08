@@ -10,6 +10,9 @@ import { COLORS } from './constants/theme';
 import { AuthProvider } from './context/AuthContext';
 import CustomDrawer from './components/CustomDrawer';
 import Auth from './components/Auth';
+import { StripeProvider } from '@stripe/stripe-react-native';
+
+
 
 import Animated from 'react-native-reanimated';
 
@@ -240,11 +243,13 @@ export default function App() {
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      <AuthProvider>
-        <NavigationContainer>
-          {session ? <MainNavigator /> : <Auth />}
-        </NavigationContainer>
-      </AuthProvider>
+      <StripeProvider publishableKey="pk_test_51RBMGHPQoHibFBdMgpeeMkBDd3BPbg41S8E3kYvUmI3zLuuWcQsAx3fCMgX5hsDpwQffiOi7iJuFULhkUecxkjtS005TR7Pp4W">
+        <AuthProvider>
+          <NavigationContainer>
+            {session ? <MainNavigator /> : <Auth />}
+          </NavigationContainer>
+        </AuthProvider>
+      </StripeProvider>
     </GestureHandlerRootView>
   );
 }

@@ -16,10 +16,11 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "newArchEnabled": true,
+      "newArchEnabled": false,
       "bundleIdentifier": "com.benwealand.myapp",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSApplePayMerchantIdentifier": "merchant.com.benwealand.myapp"
       }
     },
     "android": {
@@ -27,7 +28,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#383838"
       },
-      "newArchEnabled": true,
+      "newArchEnabled": false,
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
