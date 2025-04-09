@@ -7,17 +7,15 @@ import { createStackNavigator } from '@react-navigation/stack';
 import { FontAwesome } from '@expo/vector-icons';
 import { supabase } from './lib/supabase';
 import { COLORS } from './constants/theme';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import CustomDrawer from './components/CustomDrawer';
 import Auth from './components/Auth';
 import { StripeProvider } from '@stripe/stripe-react-native';
-
-
+import Constants from 'expo-constants';
 
 import Animated from 'react-native-reanimated';
 
 console.log("👀 Reanimated:", Animated);
-
 
 // Import screens
 import HomeScreen from './screens/HomeScreen';
@@ -26,6 +24,8 @@ import BalanceScreen from './screens/BalanceScreen';
 import InboxScreen from './screens/InboxScreen';
 import ProfileScreen from './screens/ProfileScreen';
 import NotificationSettingsScreen from './screens/NotificationSettingsScreen';
+import StripeOnboardingScreen from './screens/StripeOnboardingScreen';
+import BusinessStripeConnectScreen from './screens/BusinessStripeConnectScreen';
 
 // App State for session refresh
 import { AppState } from 'react-native';
@@ -59,6 +59,20 @@ const getScreenIcon = (routeName) => {
       return 'circle';
   }
 };
+
+// Auth Stack
+function AuthStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Auth" component={Auth} />
+    </Stack.Navigator>
+  );
+}
+
+// Main App Stack
+function MainStack() {
+  return Platform.OS === 'web' ? <WebNavigator /> : <MobileNavigator />;
+}
 
 // Web Navigation
 function WebNavigator() {
@@ -100,12 +114,49 @@ function WebNavigator() {
           title: 'Notification Settings',
         }}
       />
+      <Stack.Screen 
+        name="StripeOnboarding" 
+        component={StripeOnboardingScreen}
+        options={{
+          title: 'Stripe Onboarding',
+        }}
+      />
+      <Stack.Screen 
+        name="BusinessStripeConnect" 
+        component={BusinessStripeConnectScreen}
+        options={{
+          title: 'Connect with Stripe',
+        }}
+      />
     </Stack.Navigator>
   );
 }
 
 // Mobile Navigation
 function MobileNavigator() {
+  const [isOwner, setIsOwner] = useState(false);
+  const [ownedLocationId, setOwnedLocationId] = useState(null);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    const checkOwnership = async () => {
+      if (user) {
+        const { data: locations, error } = await supabase
+          .from('locations')
+          .select('id')
+          .eq('owner_id', user.id)
+          .single();
+
+        if (locations) {
+          setIsOwner(true);
+          setOwnedLocationId(locations.id);
+        }
+      }
+    };
+
+    checkOwnership();
+  }, [user]);
+
   return (
     <Drawer.Navigator
       drawerContent={(props) => <CustomDrawer {...props} />}
@@ -165,16 +216,18 @@ function MobileNavigator() {
           ),
         }}
       />
-      <Drawer.Screen 
-        name="Balance" 
-        component={BalanceScreen}
-        options={{
-          title: 'Balance',
-          drawerIcon: ({ color }) => (
-            <FontAwesome name="money" size={24} color={color} />
-          ),
-        }}
-      />
+      {!isOwner && (
+        <Drawer.Screen 
+          name="Balance" 
+          component={BalanceScreen}
+          options={{
+            title: 'Balance',
+            drawerIcon: ({ color }) => (
+              <FontAwesome name="money" size={24} color={color} />
+            ),
+          }}
+        />
+      )}
       <Drawer.Screen 
         name="Inbox" 
         component={InboxScreen}
@@ -185,37 +238,27 @@ function MobileNavigator() {
           ),
         }}
       />
-      <Drawer.Screen 
-        name="NotificationSettings" 
-        component={NotificationSettingsScreen}
-        options={({ navigation }) => ({
-          title: 'Notification Settings',
-          drawerItemStyle: { display: 'none' },
-          headerLeft: () => (
-            <TouchableOpacity 
-              onPress={() => navigation.navigate('Settings')}
-              style={styles.headerIconContainer}
-            >
-              <FontAwesome name="arrow-left" size={24} color={COLORS.text.white} />
-            </TouchableOpacity>
-          ),
-        })}
-      />
+      {isOwner && ownedLocationId && (
+        <Drawer.Screen 
+          name="BusinessStripeConnectScreen" 
+          component={BusinessStripeConnectScreen}
+          initialParams={{ locationId: ownedLocationId }}
+          options={{
+            title: 'Connect with Stripe',
+            drawerIcon: ({ color }) => (
+              <FontAwesome name="credit-card" size={24} color={color} />
+            ),
+          }}
+        />
+      )}
     </Drawer.Navigator>
   );
-}
-
-// Main Navigator that switches between web and mobile
-function MainNavigator() {
-  if (Platform.OS === 'web') {
-    return <WebNavigator />;
-  }
-  return <MobileNavigator />;
 }
 
 export default function App() {
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const navigationRef = React.useRef();
 
   useEffect(() => {
     // Get initial session
@@ -227,6 +270,13 @@ export default function App() {
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
+      // Reset navigation when auth state changes
+      if (!session && navigationRef.current) {
+        navigationRef.current.reset({
+          index: 0,
+          routes: [{ name: 'Auth' }],
+        });
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -235,21 +285,24 @@ export default function App() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.text.white} />
-        <Text style={styles.loadingText}>Loading...</Text>
+        <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
   }
 
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <StripeProvider publishableKey="pk_test_51RBMGHPQoHibFBdMgpeeMkBDd3BPbg41S8E3kYvUmI3zLuuWcQsAx3fCMgX5hsDpwQffiOi7iJuFULhkUecxkjtS005TR7Pp4W">
-        <AuthProvider>
-          <NavigationContainer>
-            {session ? <MainNavigator /> : <Auth />}
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AuthProvider>
+        <StripeProvider
+          publishableKey={Constants.expoConfig.extra.stripePubKey}
+          merchantIdentifier="merchant.com.benwealand.myapp"
+          urlScheme="myapp"
+        >
+          <NavigationContainer ref={navigationRef}>
+            {session ? <MainStack /> : <AuthStack />}
           </NavigationContainer>
-        </AuthProvider>
-      </StripeProvider>
+        </StripeProvider>
+      </AuthProvider>
     </GestureHandlerRootView>
   );
 }

@@ -5,8 +5,10 @@ import { FontAwesome } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { COLORS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
+import { useNavigation } from '@react-navigation/native';
 
 export default function HomeScreen() {
+  const navigation = useNavigation();
   const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);

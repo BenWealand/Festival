@@ -238,6 +238,7 @@ export default function ProfileScreen() {
         <TextInput
           style={[styles.input, fieldErrors.username && styles.inputError]}
           placeholder="Username"
+          placeholderTextColor="rgba(255, 255, 255, 0.5)"
           value={username}
           onChangeText={setUsername}
           autoCapitalize="none"
@@ -248,6 +249,7 @@ export default function ProfileScreen() {
         <TextInput
           style={[styles.input, fieldErrors.firstName && styles.inputError]}
           placeholder="First Name"
+          placeholderTextColor="rgba(255, 255, 255, 0.5)"
           value={firstName}
           onChangeText={setFirstName}
           autoCapitalize="words"
@@ -258,6 +260,7 @@ export default function ProfileScreen() {
         <TextInput
           style={styles.input}
           placeholder="Middle Name"
+          placeholderTextColor="rgba(255, 255, 255, 0.5)"
           value={middleName}
           onChangeText={setMiddleName}
           autoCapitalize="words"
@@ -267,6 +270,7 @@ export default function ProfileScreen() {
         <TextInput
           style={[styles.input, fieldErrors.lastName && styles.inputError]}
           placeholder="Last Name"
+          placeholderTextColor="rgba(255, 255, 255, 0.5)"
           value={lastName}
           onChangeText={setLastName}
           autoCapitalize="words"
@@ -277,6 +281,7 @@ export default function ProfileScreen() {
         <TextInput
           style={styles.input}
           placeholder="Suffix (Jr., Sr., III, etc.)"
+          placeholderTextColor="rgba(255, 255, 255, 0.5)"
           value={suffix}
           onChangeText={setSuffix}
           autoCapitalize="words"
@@ -287,6 +292,7 @@ export default function ProfileScreen() {
           <TextInput
             style={[styles.input, styles.countryCode]}
             placeholder="+1"
+            placeholderTextColor="rgba(255, 255, 255, 0.5)"
             value={countryCode}
             onChangeText={(text) => {
               // Ensure country code starts with +
@@ -299,6 +305,7 @@ export default function ProfileScreen() {
           <TextInput
             style={[styles.input, styles.phoneNumber, fieldErrors.phoneNumber && styles.inputError]}
             placeholder="Phone Number"
+            placeholderTextColor="rgba(255, 255, 255, 0.5)"
             value={phoneNumber}
             onChangeText={setPhoneNumber}
             keyboardType="phone-pad"
