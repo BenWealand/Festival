@@ -1,7 +1,7 @@
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, Platform } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, Platform, Linking } from 'react-native';
+import { NavigationContainer, useNavigation } from '@react-navigation/native';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { createStackNavigator } from '@react-navigation/stack';
 import { FontAwesome } from '@expo/vector-icons';
@@ -26,6 +26,14 @@ import ProfileScreen from './screens/ProfileScreen';
 import NotificationSettingsScreen from './screens/NotificationSettingsScreen';
 import StripeOnboardingScreen from './screens/StripeOnboardingScreen';
 import BusinessStripeConnectScreen from './screens/BusinessStripeConnectScreen';
+import SuccessScreen from './screens/SuccessScreen';
+import FailureScreen from './screens/FailureScreen';
+import LocationMenuScreen from './screens/LocationMenuScreen';
+import BusinessMenuScreen from './screens/BusinessMenuScreen';
+import TransactionRatingScreen from './screens/TransactionRatingScreen';
+import AnalyticsScreen from './screens/AnalyticsScreen';
+import CustomersScreen from './screens/CustomersScreen';
+import CustomerDetailsScreen from './screens/CustomerDetailsScreen';
 
 // App State for session refresh
 import { AppState } from 'react-native';
@@ -128,12 +136,83 @@ function WebNavigator() {
           title: 'Connect with Stripe',
         }}
       />
+      <Stack.Screen name="SuccessScreen" component={SuccessScreen} />
+      <Stack.Screen name="FailureScreen" component={FailureScreen} />
     </Stack.Navigator>
   );
 }
 
 // Mobile Navigation
 function MobileNavigator() {
+  const [isOwner, setIsOwner] = useState(false);
+  const [ownedLocationId, setOwnedLocationId] = useState(null);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    const checkOwnership = async () => {
+      if (user) {
+        const { data: locations, error } = await supabase
+          .from('locations')
+          .select('id')
+          .eq('owner_id', user.id)
+          .single();
+
+        if (locations) {
+          setIsOwner(true);
+          setOwnedLocationId(locations.id);
+        }
+      }
+    };
+
+    checkOwnership();
+  }, [user]);
+
+  return (
+    <Stack.Navigator
+      screenOptions={({ route, navigation }) => ({
+        headerStyle: {
+          backgroundColor: COLORS.surface.primary,
+        },
+        headerTintColor: COLORS.text.white,
+        headerTitleStyle: {
+          fontWeight: 'bold',
+        },
+      })}
+    >
+      <Stack.Screen 
+        name="DrawerHome" 
+        component={DrawerNavigator}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen 
+        name="CustomerDetails" 
+        component={CustomerDetailsScreen}
+        options={{
+          title: 'Customer Details',
+          headerShown: true,
+        }}
+      />
+      <Stack.Screen 
+        name="TransactionRating" 
+        component={TransactionRatingScreen}
+        options={{
+          title: 'Rate Transaction',
+          headerShown: true,
+        }}
+      />
+      <Stack.Screen 
+        name="NotificationSettings" 
+        component={NotificationSettingsScreen}
+        options={{
+          title: 'Notification Settings',
+          headerShown: true,
+        }}
+      />
+    </Stack.Navigator>
+  );
+}
+
+function DrawerNavigator() {
   const [isOwner, setIsOwner] = useState(false);
   const [ownedLocationId, setOwnedLocationId] = useState(null);
   const { user } = useAuth();
@@ -199,6 +278,14 @@ function MobileNavigator() {
         }}
       />
       <Drawer.Screen 
+        name="LocationMenu" 
+        component={LocationMenuScreen}
+        options={{
+          title: 'Menu',
+          drawerItemStyle: { display: 'none' },
+        }}
+      />
+      <Drawer.Screen 
         name="Profile" 
         component={ProfileScreen}
         options={{
@@ -251,7 +338,54 @@ function MobileNavigator() {
           }}
         />
       )}
+      {isOwner && (
+        <Drawer.Screen 
+          name="BusinessMenu" 
+          component={BusinessMenuScreen}
+          options={{
+            title: 'Manage Menu',
+            drawerIcon: ({ color }) => (
+              <FontAwesome name="cutlery" size={24} color={color} />
+            ),
+          }}
+        />
+      )}
+      {isOwner && (
+        <Drawer.Screen 
+          name="Analytics" 
+          component={AnalyticsScreen}
+          options={{
+            title: 'Analytics',
+            drawerIcon: ({ color }) => (
+              <FontAwesome name="bar-chart" size={24} color={color} />
+            ),
+          }}
+        />
+      )}
+      {isOwner && (
+        <Drawer.Screen 
+          name="Customers" 
+          component={CustomersScreen}
+          options={{
+            title: 'Customers',
+            drawerIcon: ({ color }) => (
+              <FontAwesome name="users" size={24} color={color} />
+            ),
+          }}
+        />
+      )}
     </Drawer.Navigator>
+  );
+}
+
+// Root Stack Navigator to always provide SuccessScreen and FailureScreen
+function RootStack() {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="Main" component={MainStack} />
+      <Stack.Screen name="SuccessScreen" component={SuccessScreen} />
+      <Stack.Screen name="FailureScreen" component={FailureScreen} />
+    </Stack.Navigator>
   );
 }
 
@@ -282,6 +416,22 @@ export default function App() {
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    const handleDeepLink = (event) => {
+      const url = event.url;
+      if (url.includes('stripe-connect-success')) {
+        navigationRef.current?.navigate('SuccessScreen');
+      } else if (url.includes('stripe-connect-failure')) {
+        navigationRef.current?.navigate('FailureScreen');
+      }
+    };
+
+    const subscription = Linking.addEventListener('url', handleDeepLink);
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -299,7 +449,7 @@ export default function App() {
           urlScheme="myapp"
         >
           <NavigationContainer ref={navigationRef}>
-            {session ? <MainStack /> : <AuthStack />}
+            {session ? <RootStack /> : <AuthStack />}
           </NavigationContainer>
         </StripeProvider>
       </AuthProvider>

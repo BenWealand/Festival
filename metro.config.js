@@ -15,6 +15,7 @@ module.exports = {
   },
   resolver: {
     ...config.resolver,
+    unstable_enablePackageExports: false, // 🔧 <- This line fixes the Supabase `stream` issue
     sourceExts: [...config.resolver.sourceExts, 'mjs'],
     assetExts: [
       ...config.resolver.assetExts,

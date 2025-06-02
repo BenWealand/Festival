@@ -1,0 +1,22 @@
+{
+  "name": "server",
+  "version": "1.0.0",
+  "description": "Backend server for Stripe integration",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.21.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.0.3",
+    "expo": "^52.0.46",
+    "expo-modules-core": "^2.3.12",
+    "express": "^4.18.2",
+    "react": "18.3.1",
+    "react-native": "0.76.9",
+    "stripe": "^12.0.0"
+  }
+}

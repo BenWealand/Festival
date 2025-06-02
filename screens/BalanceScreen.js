@@ -7,6 +7,7 @@ import { createPaymentIntentForLocation } from '../lib/stripe';
 import { useStripe } from '@stripe/stripe-react-native';
 import { useNavigation } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
+import Constants from 'expo-constants';
 
 export default function BalanceScreen() {
   const navigation = useNavigation();
@@ -29,13 +30,16 @@ export default function BalanceScreen() {
     try {
       setLoading(true);
       
-      // Fetch all locations
+      // Fetch all locations with stripe_account_id
       const { data: locationsData, error: locationsError } = await supabase
         .from('locations')
-        .select('*')
+        .select('*, stripe_account_id')
         .order('created_at', { ascending: false });
 
       if (locationsError) throw locationsError;
+
+      // Filter out locations without Stripe accounts
+      const validLocations = locationsData.filter(location => location.stripe_account_id);
 
       // Fetch user's balances
       const { data: balancesData, error: balancesError } = await supabase
@@ -51,7 +55,7 @@ export default function BalanceScreen() {
         return acc;
       }, {});
 
-      setLocations(locationsData || []);
+      setLocations(validLocations || []);
       setBalances(balancesMap);
     } catch (err) {
       console.error('Error fetching data:', err);
@@ -61,9 +65,32 @@ export default function BalanceScreen() {
     }
   };
 
+  const validateAmount = (value) => {
+    // Remove any non-numeric characters except decimal point
+    const cleaned = value.replace(/[^0-9.]/g, '');
+    
+    // Ensure only one decimal point
+    const parts = cleaned.split('.');
+    if (parts.length > 2) {
+      return parts[0] + '.' + parts.slice(1).join('');
+    }
+    
+    // Limit to 2 decimal places
+    if (parts.length === 2 && parts[1].length > 2) {
+      return parts[0] + '.' + parts[1].substring(0, 2);
+    }
+    
+    return cleaned;
+  };
+
   const handleAddBalance = async () => {
     if (!selectedLocation || !amount || isNaN(amount) || parseFloat(amount) <= 0) {
       Alert.alert('Error', 'Please enter a valid amount (e.g., 10.00)');
+      return;
+    }
+
+    if (!selectedLocation.stripe_account_id) {
+      Alert.alert('Error', 'This location is not set up to accept payments yet.');
       return;
     }
 
@@ -79,7 +106,13 @@ export default function BalanceScreen() {
       // Initialize payment sheet
       const { error: initError } = await initPaymentSheet({
         paymentIntentClientSecret: clientSecret,
-        merchantDisplayName: 'Your App Name',
+        merchantDisplayName: Constants.expoConfig.name || 'My App',
+        style: 'automatic',
+        appearance: {
+          colors: {
+            primary: COLORS.primary,
+          },
+        },
       });
       
       if (initError) {
@@ -195,7 +228,7 @@ export default function BalanceScreen() {
               placeholder="Enter amount"
               placeholderTextColor="rgba(255, 255, 255, 0.5)"
               value={amount}
-              onChangeText={setAmount}
+              onChangeText={(text) => setAmount(validateAmount(text))}
               keyboardType="decimal-pad"
               autoFocus
             />
