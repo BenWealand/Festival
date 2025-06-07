@@ -19,7 +19,7 @@ export default function BalanceScreen() {
   const [showModal, setShowModal] = useState(false);
   const [processingPayment, setProcessingPayment] = useState(false);
   const { initPaymentSheet, presentPaymentSheet } = useStripe();
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const [balances, setBalances] = useState({});
 
   useEffect(() => {
@@ -101,7 +101,13 @@ export default function BalanceScreen() {
       const amountInCents = Math.round(parseFloat(amount) * 100);
       
       // Call backend to create Payment Intent
-      const { clientSecret } = await createPaymentIntentForLocation(selectedLocation.id, amountInCents);
+      console.log('User in BalanceScreen:', user);
+      if (!user?.id) {
+        Alert.alert('Error', 'User is not authenticated.');
+        setProcessingPayment(false);
+        return;
+      }
+      const { clientSecret } = await createPaymentIntentForLocation(selectedLocation.id, amountInCents, user.id);
       
       // Initialize payment sheet
       const { error: initError } = await initPaymentSheet({
@@ -130,26 +136,6 @@ export default function BalanceScreen() {
         }
         console.error("presentPaymentSheet error:", paymentError);
         throw new Error(paymentError.message || 'Payment failed');
-      }
-      
-      // Update balance in Supabase
-      const currentBalance = balances[selectedLocation.id] || 0;
-      const newBalance = currentBalance + amountInCents;
-
-      const { error: updateError } = await supabase
-        .from('balances')
-        .upsert({
-          user_id: user.id,
-          location_id: selectedLocation.id,
-          balance: newBalance,
-          updated_at: new Date().toISOString()
-        });
-        
-      if (updateError) {
-        console.error('Error updating balance in Supabase:', updateError);
-        Alert.alert('Payment Successful', 'Your payment was successful, but there was an issue updating your displayed balance. It will update shortly.');
-      } else {
-        Alert.alert('Success', 'Balance added successfully!');
       }
       
       // Refresh data, close modal, reset state
@@ -223,15 +209,18 @@ export default function BalanceScreen() {
             <Text style={styles.modalTitle}>Add Balance</Text>
             <Text style={styles.modalSubtitle}>{selectedLocation?.name}</Text>
             
-            <TextInput
-              style={styles.amountInput}
-              placeholder="Enter amount"
-              placeholderTextColor="rgba(255, 255, 255, 0.5)"
-              value={amount}
-              onChangeText={(text) => setAmount(validateAmount(text))}
-              keyboardType="decimal-pad"
-              autoFocus
-            />
+            <View style={styles.amountInputContainer}>
+              <Text style={styles.dollarSign}>$</Text>
+              <TextInput
+                style={styles.amountInput}
+                placeholder="Enter amount (e.g., 10.00)"
+                placeholderTextColor={COLORS.text.secondary}
+                value={amount}
+                onChangeText={(text) => setAmount(validateAmount(text))}
+                keyboardType="decimal-pad"
+                autoFocus
+              />
+            </View>
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -377,15 +366,26 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     textAlign: 'center',
   },
-  amountInput: {
+  amountInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 8,
     padding: 12,
-    fontSize: 16,
     marginBottom: 20,
-    color: COLORS.text.white,
     backgroundColor: COLORS.surface.secondary,
+  },
+  dollarSign: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: COLORS.text.white,
+    marginRight: 8,
+  },
+  amountInput: {
+    flex: 1,
+    fontSize: 16,
+    color: COLORS.text.white,
   },
   modalButtons: {
     flexDirection: 'row',

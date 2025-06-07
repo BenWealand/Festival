@@ -15,18 +15,20 @@ export default function AnalyticsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [analytics, setAnalytics] = useState({
-    dailyRevenue: [],
+    dailyRedemptions: [],
     topItems: [],
     customerMetrics: {
       totalCustomers: 0,
-      averageSpend: 0,
+      averageRedemptionValue: 0,
       repeatCustomers: 0
     },
     timeMetrics: {
       busiestHour: '',
       busiestDay: '',
-      averageOrderValue: 0
-    }
+      averageRedemptionValue: 0
+    },
+    amountLeftToRedeem: 0,
+    totalRevenueDeposits: 0
   });
 
   useEffect(() => {
@@ -47,7 +49,7 @@ export default function AnalyticsScreen() {
       if (locationError) throw locationError;
 
       // Fetch last 7 days of revenue
-      const { data: revenueData, error: revenueError } = await supabase
+      const { data: dailyRedemptionsData, error: revenueError } = await supabase
         .from('daily_revenue')
         .select('*')
         .gte('date', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
@@ -74,10 +76,19 @@ export default function AnalyticsScreen() {
       // Calculate customer metrics
       const customerMetrics = {
         totalCustomers: customerData.length,
-        averageSpend: customerData.reduce((acc, curr) => acc + curr.total_spent, 0) / (customerData.length * 100),
+        averageRedemptionValue: customerData.reduce((acc, curr) => acc + curr.total_spent, 0) / (customerData.length || 1) / 100,
         repeatCustomers: customerData.filter(c => c.total_orders > 1).length
       };
 
+      // Fetch total balance for the location
+      const { data: totalBalanceData, error: totalBalanceError } = await supabase
+        .from('balances')
+        .select('balance')
+        .eq('location_id', location.id);
+      
+      if (totalBalanceError) throw totalBalanceError;
+      const amountLeftToRedeem = totalBalanceData.reduce((sum, item) => sum + item.balance, 0);
+      
       // Calculate time metrics from transactions
       const { data: timeData, error: timeError } = await supabase
         .from('transactions')
@@ -88,10 +99,20 @@ export default function AnalyticsScreen() {
 
       const timeMetrics = calculateTimeMetrics(timeData);
 
+      // Fetch total deposits for the location
+      const { data: totalDepositsData, error: totalDepositsError } = await supabase
+        .from('deposits')
+        .select('amount')
+        .eq('location_id', location.id);
+
+      if (totalDepositsError) throw totalDepositsError;
+
+      const totalRevenueDeposits = totalDepositsData.reduce((sum, item) => sum + item.amount, 0);
+
       setAnalytics({
-        dailyRevenue: revenueData.map(day => ({
+        dailyRedemptions: dailyRedemptionsData.map(day => ({
           date: new Date(day.date).toLocaleDateString(),
-          amount: day.total_revenue / 100
+          amount: day.total_revenue / 100 // This is actually total redeemed for the day
         })),
         topItems: topItems.map(item => ({
           name: item.name,
@@ -99,7 +120,9 @@ export default function AnalyticsScreen() {
           order_count: item.total_orders
         })),
         customerMetrics,
-        timeMetrics
+        timeMetrics,
+        amountLeftToRedeem,
+        totalRevenueDeposits: totalRevenueDeposits,
       });
     } catch (err) {
       console.error('Error fetching analytics:', err);
@@ -128,8 +151,8 @@ export default function AnalyticsScreen() {
 
     return {
       busiestHour: `${busiestHour}:00`,
-      busiestDay,
-      averageOrderValue: totalAmount / (data.length * 100)
+      busiestDay: busiestDay || 'N/A',
+      averageRedemptionValue: totalAmount / (data.length * 100)
     };
   };
 
@@ -152,10 +175,32 @@ export default function AnalyticsScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      {/* Daily Revenue */}
+      {/* Amount Left to Redeem */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Daily Revenue</Text>
-        {analytics.dailyRevenue.map((day, index) => (
+        <Text style={styles.sectionTitle}>Current Balances</Text>
+        <View style={styles.metricsGrid}>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricValue}>${(analytics.amountLeftToRedeem / 100).toFixed(2)}</Text>
+            <Text style={styles.metricLabel}>Amount Left to Redeem</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Total Revenue (Deposits) */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Total Revenue (Deposits)</Text>
+        <View style={styles.metricsGrid}>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricValue}>${(analytics.totalRevenueDeposits / 100).toFixed(2)}</Text>
+            <Text style={styles.metricLabel}>Total Revenue</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Daily Redemptions */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Daily Redemptions (Amount Spent)</Text>
+        {analytics.dailyRedemptions.map((day, index) => (
           <View key={index} style={styles.revenueRow}>
             <Text style={styles.dateText}>{day.date}</Text>
             <Text style={styles.amountText}>${day.amount.toFixed(2)}</Text>
@@ -177,16 +222,16 @@ export default function AnalyticsScreen() {
       {/* Customer Metrics */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Customer Insights</Text>
-        <View style={styles.metricsGrid}>
+        <View style={[styles.metricsGrid, { justifyContent: 'flex-start' }]}>
           <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>{analytics.customerMetrics.totalCustomers}</Text>
+            <Text style={styles.metricValue}>{analytics.customerMetrics.totalCustomers || 0}</Text>
             <Text style={styles.metricLabel}>Total Customers</Text>
           </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>${analytics.customerMetrics.averageSpend.toFixed(2)}</Text>
+          <View style={[styles.metricCard, { marginRight: 0 }]}>
+            <Text style={styles.metricValue}>${analytics.customerMetrics.averageRedemptionValue.toFixed(2)}</Text>
             <Text style={styles.metricLabel}>Avg. Spend</Text>
           </View>
-          <View style={styles.metricCard}>
+          <View style={[styles.metricCard, { marginRight: 0 }]}>
             <Text style={styles.metricValue}>{analytics.customerMetrics.repeatCustomers}</Text>
             <Text style={styles.metricLabel}>Repeat Customers</Text>
           </View>
@@ -195,18 +240,18 @@ export default function AnalyticsScreen() {
 
       {/* Time Metrics */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Time Analysis</Text>
+        <Text style={styles.sectionTitle}>Time Analysis (Redemptions)</Text>
         <View style={styles.metricsGrid}>
           <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>{analytics.timeMetrics.busiestHour}</Text>
+            <Text style={styles.metricValue}>{analytics.timeMetrics.busiestHour || 'N/A'}</Text>
             <Text style={styles.metricLabel}>Busiest Hour</Text>
           </View>
           <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>{analytics.timeMetrics.busiestDay}</Text>
+            <Text style={styles.metricValue}>{analytics.timeMetrics.busiestDay || 'N/A'}</Text>
             <Text style={styles.metricLabel}>Busiest Day</Text>
           </View>
           <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>${analytics.timeMetrics.averageOrderValue.toFixed(2)}</Text>
+            <Text style={styles.metricValue}>${analytics.timeMetrics.averageRedemptionValue.toFixed(2)}</Text>
             <Text style={styles.metricLabel}>Avg. Order Value</Text>
           </View>
         </View>
@@ -310,5 +355,10 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: COLORS.text.muted,
     textAlign: 'center',
+  },
+  noteText: {
+    color: COLORS.text.muted,
+    fontSize: 14,
+    marginTop: 8,
   },
 }); 

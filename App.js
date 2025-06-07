@@ -15,6 +15,24 @@ import Constants from 'expo-constants';
 
 import Animated from 'react-native-reanimated';
 
+// Ignore specific navigation warnings
+if (__DEV__) {
+  const ignoreWarns = [
+    "The action 'RESET'",
+    "was not handled by any navigator",
+  ];
+
+  const error = console.error;
+  console.error = (...arg) => {
+    for (const warning of ignoreWarns) {
+      if (typeof arg[0] === 'string' && arg[0].startsWith('ERROR') && arg[0].includes(warning)) {
+        return;
+      }
+    }
+    error(...arg);
+  };
+}
+
 console.log("👀 Reanimated:", Animated);
 
 // Import screens
@@ -34,6 +52,9 @@ import TransactionRatingScreen from './screens/TransactionRatingScreen';
 import AnalyticsScreen from './screens/AnalyticsScreen';
 import CustomersScreen from './screens/CustomersScreen';
 import CustomerDetailsScreen from './screens/CustomerDetailsScreen';
+import MenuItemDetailScreen from './screens/MenuItemDetailScreen';
+import LocationTransactionsScreen from './screens/LocationTransactionsScreen';
+import GlobalTransactionsScreen from './screens/GlobalTransactionsScreen';
 
 // App State for session refresh
 import { AppState } from 'react-native';
@@ -208,6 +229,22 @@ function MobileNavigator() {
           headerShown: true,
         }}
       />
+      <Stack.Screen 
+        name="MenuItemDetail" 
+        component={MenuItemDetailScreen}
+        options={{
+          title: 'Item Details',
+          headerShown: true,
+        }}
+      />
+      <Stack.Screen 
+        name="LocationTransactions" 
+        component={LocationTransactionsScreen}
+        options={{
+          title: 'Location Transactions',
+          headerShown: true,
+        }}
+      />
     </Stack.Navigator>
   );
 }
@@ -370,6 +407,18 @@ function DrawerNavigator() {
             title: 'Customers',
             drawerIcon: ({ color }) => (
               <FontAwesome name="users" size={24} color={color} />
+            ),
+          }}
+        />
+      )}
+      {!isOwner && (
+        <Drawer.Screen 
+          name="GlobalTransactions" 
+          component={GlobalTransactionsScreen}
+          options={{
+            title: 'All Transactions',
+            drawerIcon: ({ color }) => (
+              <FontAwesome name="history" size={24} color={color} />
             ),
           }}
         />

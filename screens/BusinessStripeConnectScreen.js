@@ -25,6 +25,8 @@ export default function BusinessStripeConnectScreen({ route, navigation }) {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [hasHandledCallback, setHasHandledCallback] = useState(false);
+  const [isConnected, setIsConnected] = useState(false); // New state for connection status
+  const [checkStatusLoading, setCheckStatusLoading] = useState(true); // Loading state for checking status
 
   // Generate a unique state value for CSRF protection
   const stateValue = useMemo(() => {
@@ -36,6 +38,39 @@ export default function BusinessStripeConnectScreen({ route, navigation }) {
     console.log('Generated stateValue:', value);
     return value;
   }, [locationId, user?.id]);
+
+  // Effect to check Stripe connection status on load
+  useEffect(() => {
+    const checkStripeConnection = async () => {
+      if (!locationId) {
+        setCheckStatusLoading(false);
+        return;
+      }
+      try {
+        const { data: location, error } = await supabase
+          .from('locations')
+          .select('stripe_account_id')
+          .eq('id', locationId)
+          .single();
+
+        if (error) throw error;
+
+        if (location?.stripe_account_id) {
+          setIsConnected(true);
+        } else {
+          setIsConnected(false);
+        }
+      } catch (error) {
+        console.error('Error checking Stripe connection:', error);
+        Alert.alert('Error', 'Could not check Stripe connection status.');
+        setIsConnected(false);
+      } finally {
+        setCheckStatusLoading(false);
+      }
+    };
+
+    checkStripeConnection();
+  }, [locationId]); // Re-run when locationId changes
 
   useEffect(() => {
     // Handle deep link when returning from Stripe
@@ -72,11 +107,9 @@ export default function BusinessStripeConnectScreen({ route, navigation }) {
             [{ 
               text: 'OK', 
               onPress: () => {
-                console.log('Navigating back with locationId:', returnedLocationId);
-                navigation.navigate('BusinessLocations', { 
-                  refresh: true,
-                  connectedLocationId: returnedLocationId 
-                });
+                console.log('Stripe connected, navigating back...');
+                setIsConnected(true); // Update state immediately
+                navigation.goBack(); // Navigate back instead of to BusinessLocations
               }
             }]
           );
@@ -161,6 +194,34 @@ export default function BusinessStripeConnectScreen({ route, navigation }) {
     }
   };
 
+  // Show loading indicator while checking connection status
+  if (checkStatusLoading) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loadingText}>Checking connection status...</Text>
+      </View>
+    );
+  }
+
+  // Render different UI based on connection status
+  if (isConnected) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>Stripe Connected!</Text>
+        <Text style={styles.description}>
+          Your business is successfully connected to Stripe.
+        </Text>
+        {/* Optional: Add a button to manage Stripe settings or go back */}
+        <Button 
+          title="Done"
+          onPress={() => navigation.goBack()}
+          color={COLORS.primary}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Connect with Stripe</Text>
@@ -171,8 +232,9 @@ export default function BusinessStripeConnectScreen({ route, navigation }) {
         title={isLoading ? "Connecting..." : "Connect with Stripe"}
         onPress={handleConnectStripe}
         disabled={isLoading}
+        color={COLORS.primary} // Apply primary color
       />
-      {isLoading && <ActivityIndicator size="large" color={COLORS.primary} />}
+      {isLoading && <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 20 }} />}
     </View>
   );
 }
@@ -183,18 +245,26 @@ const styles = StyleSheet.create({
     padding: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.background,
+    // Use COLORS.surface.primary for background consistency
+    backgroundColor: COLORS.surface.primary,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 20,
-    color: COLORS.text,
+    // Use COLORS.text.white for text color consistency
+    color: COLORS.text.white,
   },
   description: {
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 30,
-    color: COLORS.text,
+    // Use COLORS.text.white for text color consistency
+    color: COLORS.text.white,
   },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: COLORS.text.white,
+  }
 }); 

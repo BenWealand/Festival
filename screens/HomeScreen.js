@@ -1,126 +1,167 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { COLORS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 
 export default function HomeScreen() {
   const navigation = useNavigation();
   const [businessData, setBusinessData] = useState(null);
   const [recentTransactions, setRecentTransactions] = useState([]);
+  const [recentDeposits, setRecentDeposits] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isOwner, setIsOwner] = useState(false);
   const { user } = useAuth();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        
-        // First check if user is an owner
-        const { data: ownedLocation, error: ownerError } = await supabase
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      
+      // First check if user is an owner
+      const { data: ownedLocation, error: ownerError } = await supabase
+        .from('locations')
+        .select('id')
+        .eq('owner_id', user?.id)
+        .single();
+
+      if (ownerError && ownerError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+        throw ownerError;
+      }
+
+      setIsOwner(!!ownedLocation);
+
+      if (ownedLocation) {
+        // Fetch business data for owners
+        const { data: business, error: businessError } = await supabase
           .from('locations')
-          .select('id')
-          .eq('owner_id', user?.id)
+          .select(`
+            id,
+            name,
+            logo_url,
+            business_metrics (
+              total_revenue,
+              total_transactions,
+              average_rating
+            )
+          `)
+          .eq('id', ownedLocation.id)
           .single();
 
-        if (ownerError && ownerError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
-          throw ownerError;
-        }
+        if (businessError) throw businessError;
 
-        setIsOwner(!!ownedLocation);
+        // Fetch total balance for the location
+        const { data: totalBalanceData, error: totalBalanceError } = await supabase
+          .from('balances')
+          .select('balance')
+          .eq('location_id', ownedLocation.id);
 
-        if (ownedLocation) {
-          // Fetch business data for owners
-          const { data: business, error: businessError } = await supabase
-            .from('locations')
-            .select(`
-              id,
-              name,
-              logo_url,
-              business_metrics (
-                total_revenue,
-                total_transactions,
-                average_rating
-              )
-            `)
-            .eq('id', ownedLocation.id)
-            .single();
+        if (totalBalanceError) throw totalBalanceError;
 
-          if (businessError) throw businessError;
+        const amountLeftToRedeem = totalBalanceData.reduce((sum, item) => sum + item.balance, 0);
 
-          // Fetch recent transactions
-          const { data: transactions, error: transactionsError } = await supabase
-            .from('transactions')
-            .select(`
-              id,
-              amount,
-              created_at,
-              customer_name,
-              status
-            `)
-            .eq('location_id', business.id)
-            .order('created_at', { ascending: false })
-            .limit(5);
+        // Fetch recent transactions
+        const { data: transactions, error: transactionsError } = await supabase
+          .from('transactions')
+          .select(`
+            id,
+            amount,
+            created_at,
+            customer_name,
+            status
+          `)
+          .eq('location_id', business.id)
+          .order('created_at', { ascending: false })
+          .limit(5);
 
-          if (transactionsError) throw transactionsError;
+        if (transactionsError) throw transactionsError;
 
-          setBusinessData({
-            ...business,
-            total_revenue: business.business_metrics?.total_revenue || 0,
-            total_transactions: business.business_metrics?.total_transactions || 0,
-            average_rating: business.business_metrics?.average_rating || 0
-          });
-          setRecentTransactions(transactions);
-        } else {
-          // For non-owners, fetch their locations and points
-          const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('id', user?.id)
-            .single();
+        // Fetch total deposits for the location
+        const { data: totalDepositsData, error: totalDepositsError } = await supabase
+          .from('deposits')
+          .select('amount')
+          .eq('location_id', ownedLocation.id);
 
-          if (profileError) throw profileError;
+        if (totalDepositsError) throw totalDepositsError;
 
-          const { data: locations, error: locationsError } = await supabase
-            .from('locations')
-            .select(`
-              id,
-              name,
-              logo_url,
-              balances!inner (
-                balance
-              )
-            `)
-            .eq('balances.user_id', profile.id)
-            .order('id', { ascending: true });
+        const totalRevenueDeposits = totalDepositsData.reduce((sum, item) => sum + item.amount, 0);
 
-          if (locationsError) throw locationsError;
+        // Fetch recent deposits for the location
+        const { data: recentDeposits, error: recentDepositsError } = await supabase
+          .from('deposits')
+          .select(`
+            id,
+            amount,
+            created_at,
+            user_id
+          `)
+          .eq('location_id', ownedLocation.id)
+          .order('created_at', { ascending: false })
+          .limit(5);
 
-          setBusinessData({
-            locations: locations.map(location => ({
-              id: location.id,
-              name: location.name,
-              logo_url: location.logo_url,
-              points: location.balances[0]?.balance || 0
-            }))
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        setError(`Failed to load data: ${error.message}`);
-      } finally {
-        setLoading(false);
+        if (recentDepositsError) throw recentDepositsError;
+
+        setBusinessData({
+          ...business,
+          amount_redeemed: business.business_metrics?.total_revenue || 0,
+          total_transactions: business.business_metrics?.total_transactions || 0,
+          average_rating: business.business_metrics?.average_rating || 0,
+          amount_left_to_redeem: amountLeftToRedeem,
+          total_revenue_deposits: totalRevenueDeposits,
+        });
+        setRecentTransactions(transactions);
+        setRecentDeposits(recentDeposits);
+      } else {
+        // For non-owners, fetch their locations and points
+        const { data: profile, error: profileError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', user?.id)
+          .single();
+
+        if (profileError) throw profileError;
+
+        const { data: locations, error: locationsError } = await supabase
+          .from('locations')
+          .select(`
+            id,
+            name,
+            logo_url,
+            balances!inner (
+              balance
+            )
+          `)
+          .eq('balances.user_id', profile.id)
+          .order('id', { ascending: true });
+
+        if (locationsError) throw locationsError;
+
+        setBusinessData({
+          locations: locations.map(location => ({
+            id: location.id,
+            name: location.name,
+            logo_url: location.logo_url,
+            points: location.balances[0]?.balance || 0
+          }))
+        });
       }
-    };
-
-    if (user) {
-      fetchData();
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      setError(`Failed to load data: ${error.message}`);
+    } finally {
+      setLoading(false);
     }
   }, [user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        fetchData();
+      }
+    }, [user, fetchData])
+  );
 
   if (loading) {
     return (
@@ -175,17 +216,22 @@ export default function HomeScreen() {
         {/* Performance Metrics */}
         <View style={styles.metricsContainer}>
           <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>${businessData?.total_revenue || 0}</Text>
-            <Text style={styles.metricLabel}>Total Revenue</Text>
+            <Text style={styles.metricValue}>${(businessData?.total_revenue_deposits / 100 || 0).toFixed(2)}</Text>
+            <Text style={styles.metricLabel}>Total Revenue (Deposits)</Text>
+          </View>
+          <View style={styles.metricCard}>
+            <Text style={styles.metricValue}>${(businessData?.amount_left_to_redeem / 100 || 0).toFixed(2)}</Text>
+            <Text style={styles.metricLabel}>Left to Redeem</Text>
           </View>
           <View style={styles.metricCard}>
             <Text style={styles.metricValue}>{businessData?.total_transactions || 0}</Text>
-            <Text style={styles.metricLabel}>Transactions</Text>
+            <Text style={styles.metricLabel}>Total Redemptions</Text>
           </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>{businessData?.average_rating || 0}</Text>
-            <Text style={styles.metricLabel}>Avg Rating</Text>
-          </View>
+        </View>
+
+        {/* Note about Amount Redeemed */}
+        <View style={styles.noteContainer}>
+          <Text style={styles.noteText}>Amount Redeemed refers to the total value of items purchased using customer balances.</Text>
         </View>
 
         {/* Quick Actions */}
@@ -215,59 +261,85 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Recent Transactions */}
+        {/* Recent Deposits */}
         <View style={styles.transactionsContainer}>
-          <Text style={styles.sectionTitle}>Recent Transactions</Text>
-          {recentTransactions.map((transaction) => (
-            <TouchableOpacity 
-              key={transaction.id}
-              style={styles.transactionItem}
-              onPress={() => {
-                if (transaction.status === 'completed' && !transaction.rating) {
-                  navigation.navigate('TransactionRating', { 
-                    transactionId: transaction.id,
-                    transaction: transaction
-                  });
-                } else {
-                  navigation.navigate('TransactionDetails', { transactionId: transaction.id });
-                }
-              }}
-            >
-              <View style={styles.transactionInfo}>
-                <Text style={styles.transactionCustomer}>{transaction.customer_name}</Text>
-                <Text style={styles.transactionDate}>
-                  {new Date(transaction.created_at).toLocaleDateString()}
-                </Text>
-              </View>
-              <View style={styles.transactionAmount}>
-                <Text style={styles.amountText}>${transaction.amount}</Text>
-                <View style={styles.transactionStatus}>
-                  <Text style={[
-                    styles.statusText,
-                    { color: transaction.status === 'completed' ? COLORS.success : COLORS.warning }
-                  ]}>
-                    {transaction.status}
+          <Text style={styles.sectionTitle}>Recent Deposits</Text>
+          {recentDeposits.length === 0 ? (
+            <Text style={styles.emptyText}>No recent deposits.</Text>
+          ) : (
+            recentDeposits.map((deposit) => (
+              <View key={deposit.id} style={styles.transactionItem}>
+                <View style={styles.transactionInfo}>
+                  <Text style={styles.transactionCustomer}>User: {deposit.user_id ? deposit.user_id.substring(0, 6) + '...' : 'N/A'}</Text>
+                  <Text style={styles.transactionDate}>
+                    {new Date(deposit.created_at).toLocaleDateString()}
                   </Text>
-                  {transaction.status === 'completed' && !transaction.rating && (
-                    <Text style={styles.ratePrompt}>Tap to rate</Text>
-                  )}
-                  {transaction.rating && (
-                    <View style={styles.ratingContainer}>
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <FontAwesome
-                          key={star}
-                          name={star <= transaction.rating ? "star" : "star-o"}
-                          size={12}
-                          color={COLORS.primary}
-                          style={styles.ratingStar}
-                        />
-                      ))}
-                    </View>
-                  )}
+                </View>
+                <View style={styles.transactionAmount}>
+                  <Text style={styles.amountText}>+${(deposit.amount / 100).toFixed(2)}</Text>
                 </View>
               </View>
-            </TouchableOpacity>
-          ))}
+            ))
+          )}
+        </View>
+
+        {/* Recent Redemptions */}
+        <View style={styles.transactionsContainer}>
+          <Text style={styles.sectionTitle}>Recent Redemptions</Text>
+          {recentTransactions.length === 0 ? (
+            <Text style={styles.emptyText}>No recent redemptions.</Text>
+          ) : (
+            recentTransactions.map((transaction) => (
+              <TouchableOpacity 
+                key={transaction.id}
+                style={styles.transactionItem}
+                onPress={() => {
+                  if (transaction.status === 'completed' && !transaction.rating) {
+                    navigation.navigate('TransactionRating', { 
+                      transactionId: transaction.id,
+                      transaction: transaction
+                    });
+                  } else {
+                    navigation.navigate('TransactionDetails', { transactionId: transaction.id });
+                  }
+                }}
+              >
+                <View style={styles.transactionInfo}>
+                  <Text style={styles.transactionCustomer}>{transaction.customer_name}</Text>
+                  <Text style={styles.transactionDate}>
+                    {new Date(transaction.created_at).toLocaleDateString()}
+                  </Text>
+                </View>
+                <View style={styles.transactionAmount}>
+                  <Text style={styles.amountText}>-${(transaction.amount / 100).toFixed(2)}</Text>
+                  <View style={styles.transactionStatus}>
+                    <Text style={[
+                      styles.statusText,
+                      { color: transaction.status === 'completed' ? COLORS.success : COLORS.warning }
+                    ]}>
+                      {transaction.status}
+                    </Text>
+                    {transaction.status === 'completed' && !transaction.rating && (
+                      <Text style={styles.ratePrompt}>Tap to rate</Text>
+                    )}
+                    {transaction.rating && (
+                      <View style={styles.ratingContainer}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <FontAwesome
+                            key={star}
+                            name={star <= transaction.rating ? "star" : "star-o"}
+                            size={12}
+                            color={COLORS.primary}
+                            style={styles.ratingStar}
+                          />
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
         </View>
       </ScrollView>
     );
@@ -308,8 +380,7 @@ export default function HomeScreen() {
               </View>
               
               <View style={styles.pointsContainer}>
-                <Text style={styles.pointsNumber}>{location.points}</Text>
-                <Text style={styles.pointsLabel}>points</Text>
+                <Text style={styles.pointsNumber}>${(location.points / 100).toFixed(2)}</Text>
               </View>
             </TouchableOpacity>
           ))
@@ -407,6 +478,15 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontSize: 14,
     color: COLORS.text.muted,
+  },
+  noteContainer: {
+    padding: 16,
+    backgroundColor: COLORS.surface.card,
+    marginTop: 16,
+  },
+  noteText: {
+    color: COLORS.text.muted,
+    fontSize: 14,
   },
   quickActionsContainer: {
     padding: 16,
@@ -536,6 +616,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  logo: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
   locationInfo: {
     flex: 1,
     paddingHorizontal: 16,
@@ -553,10 +638,5 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: COLORS.text.white,
-  },
-  pointsLabel: {
-    fontSize: 14,
-    color: COLORS.text.white,
-    marginTop: 4,
   },
 }); 
