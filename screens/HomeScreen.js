@@ -5,6 +5,142 @@ import { supabase } from '../lib/supabase';
 import { COLORS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import Animated, { useSharedValue, useAnimatedStyle, useAnimatedScrollHandler, withSpring, interpolate, Extrapolate, runOnJS } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
+// import { PanGestureHandler } from 'react-native-gesture-handler';
+
+// CardStack for Apple Wallet-style UI
+function CardStack({ data, onCardPress }) {
+  const CARD_HEIGHT = 220;
+  const CARD_HEADER_HEIGHT = 70;
+  const CARD_OFFSET = 55;
+  const CARD_BORDER_RADIUS = 18;
+  const CARD_MARGIN = 16;
+  const [expandedIndex, setExpandedIndex] = useState(null);
+
+  // Reverse the data so the last card is rendered last (on top)
+  const reversedData = [...data].reverse();
+
+  const CARD_GRADIENTS = [
+    ['#f7b733', '#fc4a1a'], // orange to red
+    ['#43cea2', '#185a9d'], // green to blue
+    ['#ffaf7b', '#d76d77'], // peach to pink
+    ['#43e97b', '#38f9d7'], // green to teal
+    ['#fa709a', '#fee140'], // pink to yellow
+    ['#30cfd0', '#330867'], // teal to purple
+    ['#f7971e', '#ffd200'], // orange to yellow
+    ['#c471f5', '#fa71cd'], // purple to pink
+  ];
+
+  const CardItem = ({ item, index }) => {
+    // index is for reversedData, so 0 is the bottom card (fully visible)
+    const originalIndex = data.length - 1 - index;
+    const animatedStyle = useAnimatedStyle(() => {
+      let top = index * CARD_OFFSET;
+      let height = CARD_HEIGHT;
+      let zIndex = index;
+      let scale = 1;
+      let boxShadow = 6;
+      let visible = true;
+
+      if (expandedIndex === originalIndex) {
+        top = 0;
+        zIndex = 999;
+        scale = 1.04;
+        boxShadow = 12;
+      } else if (expandedIndex !== null && expandedIndex !== originalIndex) {
+        // Hide all other cards when one is expanded
+        visible = false;
+      }
+
+      return {
+        position: 'absolute',
+        left: CARD_MARGIN,
+        right: CARD_MARGIN,
+        top,
+        height: CARD_HEIGHT,
+        zIndex,
+        transform: [{ scale }],
+        elevation: boxShadow,
+        opacity: visible ? 1 : 0,
+      };
+    }, [expandedIndex]);
+
+    return (
+      <Animated.View
+        style={[
+          {
+            borderRadius: CARD_BORDER_RADIUS,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.12,
+            shadowRadius: 8,
+            overflow: 'hidden',
+            borderWidth: 1,
+            borderColor: COLORS.border,
+          },
+          animatedStyle,
+        ]}
+      >
+        <LinearGradient
+          colors={CARD_GRADIENTS[index % CARD_GRADIENTS.length]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ flex: 1, borderRadius: CARD_BORDER_RADIUS }}
+        >
+          <TouchableOpacity
+            style={{ flex: 1 }}
+            activeOpacity={0.95}
+            onPress={() => {
+              if (expandedIndex === originalIndex) {
+                setExpandedIndex(null); // Collapse
+              } else {
+                setExpandedIndex(originalIndex); // Expand
+              }
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              {/* Header: Always visible */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, height: CARD_HEADER_HEIGHT, justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 20, fontWeight: '700', color: COLORS.text.white, flex: 1 }} numberOfLines={1} ellipsizeMode="tail">
+                  {item.name}
+                </Text>
+                <Text style={{ fontSize: 16, color: COLORS.text.muted, marginLeft: 12, fontWeight: '600', flexShrink: 0 }} numberOfLines={1} ellipsizeMode="tail">
+                  ${(item.points / 100).toFixed(2)}
+                </Text>
+              </View>
+              {/* Expanded details: Only visible when expanded */}
+              {expandedIndex === originalIndex && (
+                <View style={{ padding: 20, borderTopWidth: 1, borderTopColor: COLORS.border, alignItems: 'center', justifyContent: 'center', flex: 1 }}>
+                  {item.logo_url ? (
+                    <Image
+                      source={{ uri: item.logo_url }}
+                      style={{ width: 64, height: 64, borderRadius: 16, marginBottom: 16 }}
+                    />
+                  ) : null}
+                  <Text style={{ color: COLORS.text.white, fontSize: 16, textAlign: 'center' }}>
+                    More details can go here!
+                  </Text>
+                </View>
+              )}
+            </View>
+          </TouchableOpacity>
+        </LinearGradient>
+      </Animated.View>
+    );
+  };
+
+  // Container height for stacking
+  const containerHeight = CARD_HEIGHT + (reversedData.length - 1) * CARD_OFFSET + 2 * CARD_MARGIN;
+
+  return (
+    <View style={{ height: containerHeight, marginTop: 32, backgroundColor: COLORS.surface.primary }}>
+      {reversedData.map((item, index) => (
+        <CardItem item={item} index={index} key={item.id} />
+      ))}
+    </View>
+  );
+}
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -19,6 +155,7 @@ export default function HomeScreen() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      console.log('Fetching data for user:', user?.id);
       
       // First check if user is an owner
       const { data: ownedLocation, error: ownerError } = await supabase
@@ -27,11 +164,14 @@ export default function HomeScreen() {
         .eq('owner_id', user?.id)
         .single();
 
-      if (ownerError && ownerError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+      console.log('Owner check result:', { ownedLocation, ownerError });
+
+      if (ownerError && ownerError.code !== 'PGRST116') {
         throw ownerError;
       }
 
       setIsOwner(!!ownedLocation);
+      console.log('isOwner set to:', !!ownedLocation);
 
       if (ownedLocation) {
         // Fetch business data for owners
@@ -78,6 +218,21 @@ export default function HomeScreen() {
 
         if (transactionsError) throw transactionsError;
 
+        // Fetch user names for transactions
+        const transactionUserIds = transactions.map(t => t.customer_name);
+        const { data: transactionProfiles, error: transactionProfilesError } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', transactionUserIds);
+
+        if (transactionProfilesError) throw transactionProfilesError;
+
+        // Map user names to transactions
+        const transactionsWithNames = transactions.map(transaction => ({
+          ...transaction,
+          user_name: transactionProfiles?.find(p => p.id === transaction.customer_name)?.full_name || 'Unknown Customer'
+        }));
+
         // Fetch total deposits for the location
         const { data: totalDepositsData, error: totalDepositsError } = await supabase
           .from('deposits')
@@ -88,7 +243,7 @@ export default function HomeScreen() {
 
         const totalRevenueDeposits = totalDepositsData.reduce((sum, item) => sum + item.amount, 0);
 
-        // Fetch recent deposits for the location
+        // Fetch recent deposits
         const { data: recentDeposits, error: recentDepositsError } = await supabase
           .from('deposits')
           .select(`
@@ -103,6 +258,21 @@ export default function HomeScreen() {
 
         if (recentDepositsError) throw recentDepositsError;
 
+        // Fetch user names for deposits
+        const depositUserIds = recentDeposits.map(d => d.user_id);
+        const { data: depositProfiles, error: depositProfilesError } = await supabase
+          .from('profiles')
+          .select('id, full_name')
+          .in('id', depositUserIds);
+
+        if (depositProfilesError) throw depositProfilesError;
+
+        // Map user names to deposits
+        const depositsWithNames = recentDeposits.map(deposit => ({
+          ...deposit,
+          user_name: depositProfiles?.find(p => p.id === deposit.user_id)?.full_name || 'Unknown Customer'
+        }));
+
         setBusinessData({
           ...business,
           amount_redeemed: business.business_metrics?.total_revenue || 0,
@@ -111,8 +281,8 @@ export default function HomeScreen() {
           amount_left_to_redeem: amountLeftToRedeem,
           total_revenue_deposits: totalRevenueDeposits,
         });
-        setRecentTransactions(transactions);
-        setRecentDeposits(recentDeposits);
+        setRecentTransactions(transactionsWithNames);
+        setRecentDeposits(depositsWithNames);
       } else {
         // For non-owners, fetch their locations and points
         const { data: profile, error: profileError } = await supabase
@@ -164,6 +334,7 @@ export default function HomeScreen() {
   );
 
   if (loading) {
+    console.log('Rendering loading state');
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.text.white} />
@@ -173,6 +344,7 @@ export default function HomeScreen() {
   }
 
   if (error) {
+    console.log('Rendering error state:', error);
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error}</Text>
@@ -185,6 +357,8 @@ export default function HomeScreen() {
       </View>
     );
   }
+
+  console.log('Rendering main view:', { isOwner, businessData });
 
   // Render business owner dashboard
   if (isOwner) {
@@ -270,7 +444,7 @@ export default function HomeScreen() {
             recentDeposits.map((deposit) => (
               <View key={deposit.id} style={styles.transactionItem}>
                 <View style={styles.transactionInfo}>
-                  <Text style={styles.transactionCustomer}>User: {deposit.user_id ? deposit.user_id.substring(0, 6) + '...' : 'N/A'}</Text>
+                  <Text style={styles.transactionCustomer}>User: {deposit.user_name}</Text>
                   <Text style={styles.transactionDate}>
                     {new Date(deposit.created_at).toLocaleDateString()}
                   </Text>
@@ -305,7 +479,7 @@ export default function HomeScreen() {
                 }}
               >
                 <View style={styles.transactionInfo}>
-                  <Text style={styles.transactionCustomer}>{transaction.customer_name}</Text>
+                  <Text style={styles.transactionCustomer}>{transaction.user_name}</Text>
                   <Text style={styles.transactionDate}>
                     {new Date(transaction.created_at).toLocaleDateString()}
                   </Text>
@@ -346,48 +520,23 @@ export default function HomeScreen() {
   }
 
   // Render customer view
-  return (
-    <ScrollView style={styles.container}>
-      <View style={styles.locationsContainer}>
+  if (!isOwner) {
+    return (
+      <View style={styles.container}>
         {businessData?.locations?.length === 0 ? (
           <View style={styles.emptyContainer}>
             <FontAwesome name="map-marker" size={48} color={COLORS.text.muted} />
             <Text style={styles.emptyText}>No locations available</Text>
           </View>
         ) : (
-          businessData?.locations?.map((location) => (
-            <TouchableOpacity 
-              key={location.id} 
-              style={styles.locationBox}
-              onPress={() => navigation.navigate('LocationMenu', { locationId: location.id })}
-            >
-              <View style={styles.logoContainer}>
-                {location.logo_url ? (
-                  <Image 
-                    source={{ uri: location.logo_url }} 
-                    style={styles.logo}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={styles.logoCircle}>
-                    <FontAwesome name="building" size={24} color={COLORS.text.white} />
-                  </View>
-                )}
-              </View>
-              
-              <View style={styles.locationInfo}>
-                <Text style={styles.locationText}>{location.name}</Text>
-              </View>
-              
-              <View style={styles.pointsContainer}>
-                <Text style={styles.pointsNumber}>${(location.points / 100).toFixed(2)}</Text>
-              </View>
-            </TouchableOpacity>
-          ))
+          <CardStack
+            data={businessData.locations}
+            onCardPress={(location) => navigation.navigate('LocationMenu', { locationId: location.id })}
+          />
         )}
       </View>
-    </ScrollView>
-  );
+    );
+  }
 }
 
 const styles = StyleSheet.create({

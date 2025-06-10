@@ -49,12 +49,43 @@ export default function CustomersScreen({ navigation }) {
 
       if (customerError) throw customerError;
 
+      // Get unique customer names from transactions
+      const customerNames = [...new Set(customerData.map(t => t.customer_name))];
+
+      // Separate UUIDs and emails
+      const uuids = customerNames.filter(name => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(name));
+      const emails = customerNames.filter(name => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(name));
+
+      // Fetch profiles for UUIDs
+      const { data: uuidProfiles, error: uuidError } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .in('id', uuids);
+
+      // Fetch profiles for emails
+      const { data: emailProfiles, error: emailError } = await supabase
+        .from('profiles')
+        .select('email, full_name')
+        .in('email', emails);
+
+      if (uuidError || emailError) {
+        console.error('Error fetching profiles:', uuidError || emailError);
+        // Continue without profiles if there's an error
+      }
+
+      // Combine profiles
+      const profiles = [...(uuidProfiles || []), ...(emailProfiles || [])];
+
       // Process customer data
       const customerMap = new Map();
       customerData.forEach(transaction => {
         if (!customerMap.has(transaction.customer_name)) {
+          const profile = profiles?.find(p => 
+            p.id === transaction.customer_name || p.email === transaction.customer_name
+          );
           customerMap.set(transaction.customer_name, {
-            name: transaction.customer_name,
+            id: transaction.customer_name,
+            name: profile?.full_name || transaction.customer_name,
             totalSpent: 0,
             lastVisit: null,
             transactionCount: 0,
@@ -107,6 +138,12 @@ export default function CustomersScreen({ navigation }) {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity 
+          style={styles.retryButton}
+          onPress={() => fetchCustomers()}
+        >
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -123,7 +160,7 @@ export default function CustomersScreen({ navigation }) {
           key={index}
           style={styles.customerCard}
           onPress={() => {
-            if (customer && customer.name) {
+            if (customer && customer.id) {
               navigation.navigate('CustomerDetails', { 
                 customer: {
                   ...customer,
@@ -182,6 +219,16 @@ const styles = StyleSheet.create({
     color: COLORS.error,
     fontSize: 16,
     textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 20,
+    padding: 10,
+    backgroundColor: COLORS.primary,
+    borderRadius: 5,
+  },
+  retryButtonText: {
+    color: COLORS.text.white,
+    fontSize: 16,
   },
   header: {
     padding: 16,

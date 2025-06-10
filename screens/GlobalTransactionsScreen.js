@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { COLORS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function GlobalTransactionsScreen() {
   const { user } = useAuth();
@@ -10,16 +11,17 @@ export default function GlobalTransactionsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    if (user) {
-      fetchTransactions();
-    }
-  }, [user]);
-
-  const fetchTransactions = async () => {
+  const fetchTransactions = useCallback(async () => {
     try {
       setLoading(true);
-      // Fetch all transactions for the current user across all locations
+      setError(null);
+      
+      if (!user) {
+        throw new Error('No user found');
+      }
+
+      console.log('Fetching transactions for user:', user.id, user.email);
+      
       const { data, error } = await supabase
         .from('transactions')
         .select(`
@@ -28,18 +30,40 @@ export default function GlobalTransactionsScreen() {
           created_at,
           customer_name,
           status,
-          location:locations (\n            name\n          ),\n          items:transaction_items (\n            quantity,\n            price_at_time,\n            menu_item:menu_items (\n              name\n            )\n          )\n        `)
-        .eq('customer_name', user.email) // Assuming customer_name stores user email
+          items,
+          location:locations (
+            name
+          )
+        `)
+        .or(`customer_name.eq.${user.id},customer_name.eq.${user.email}`)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setTransactions(data);
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
+
+      console.log('Found transactions:', data?.length || 0);
+      setTransactions(data || []);
     } catch (err) {
-      console.error('Error fetching global transactions:', err);
-      setError('Failed to load transactions');
+      console.error('Error in fetchTransactions:', err);
+      setError(err.message || 'Failed to load transactions');
     } finally {
       setLoading(false);
     }
+  }, [user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        fetchTransactions();
+      }
+    }, [user, fetchTransactions])
+  );
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
   };
 
   if (loading) {
@@ -55,6 +79,12 @@ export default function GlobalTransactionsScreen() {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity 
+          style={styles.retryButton}
+          onPress={() => fetchTransactions()}
+        >
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -67,17 +97,32 @@ export default function GlobalTransactionsScreen() {
       ) : (
         transactions.map((transaction) => (
           <View key={transaction.id} style={styles.transactionItem}>
-            <View style={styles.transactionInfo}>
+            <View style={styles.transactionHeader}>
               <Text style={styles.locationName}>{transaction.location?.name || 'Unknown Location'}</Text>
-              <Text style={styles.transactionDate}>
-                {new Date(transaction.created_at).toLocaleString()}
-              </Text>
-              {transaction.items && transaction.items.map(item => (
-                <Text key={item.menu_item.name} style={styles.itemText}>\n                  {item.quantity} x {item.menu_item.name} @ ${((item.price_at_time * item.quantity) / 100).toFixed(2)}
-                </Text>
-              ))}
+              <Text style={styles.transactionDate}>{formatDate(transaction.created_at)}</Text>
             </View>
-            <Text style={styles.totalAmount}>${(transaction.amount / 100).toFixed(2)}</Text>
+            
+            <View style={styles.transactionDetails}>
+              {transaction.items && transaction.items.length > 0 ? (
+                transaction.items.map((item, index) => (
+                  <View key={index} style={styles.itemRow}>
+                    <Text style={styles.itemText}>
+                      {item.quantity}x {item.name}
+                    </Text>
+                    <Text style={styles.itemPrice}>
+                      ${((item.price * item.quantity) / 100).toFixed(2)}
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.noItemsText}>No items in this transaction</Text>
+              )}
+            </View>
+
+            <View style={styles.transactionFooter}>
+              <Text style={styles.statusText}>Status: {transaction.status}</Text>
+              <Text style={styles.totalAmount}>Total: ${(transaction.amount / 100).toFixed(2)}</Text>
+            </View>
           </View>
         ))
       )}
@@ -107,15 +152,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: COLORS.surface.primary,
+    padding: 20,
   },
   errorText: {
     color: COLORS.error,
     margin: 10,
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 20,
+    padding: 10,
+    backgroundColor: COLORS.primary,
+    borderRadius: 5,
+  },
+  retryButtonText: {
+    color: COLORS.text.white,
+    fontSize: 16,
   },
   title: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 20,
     color: COLORS.text.white,
   },
   emptyText: {
@@ -124,19 +181,16 @@ const styles = StyleSheet.create({
     color: COLORS.text.muted,
   },
   transactionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    justifyContent: 'space-between',
+    backgroundColor: COLORS.surface.secondary,
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
   },
-  transactionInfo: {
-    flex: 1,
-    marginRight: 10,
+  transactionHeader: {
+    marginBottom: 12,
   },
   locationName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.text.white,
     marginBottom: 4,
@@ -144,14 +198,44 @@ const styles = StyleSheet.create({
   transactionDate: {
     fontSize: 14,
     color: COLORS.text.muted,
-    marginBottom: 4,
+  },
+  transactionDetails: {
+    marginBottom: 12,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
   itemText: {
-    fontSize: 14,
+    fontSize: 16,
     color: COLORS.text.white,
+    flex: 1,
+  },
+  itemPrice: {
+    fontSize: 16,
+    color: COLORS.text.white,
+    marginLeft: 8,
+  },
+  noItemsText: {
+    fontSize: 14,
+    color: COLORS.text.muted,
+    fontStyle: 'italic',
+  },
+  transactionFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: 12,
+  },
+  statusText: {
+    fontSize: 14,
+    color: COLORS.text.muted,
   },
   totalAmount: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
     color: COLORS.primary,
   },

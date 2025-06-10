@@ -51,16 +51,17 @@ export default {
     extra: {
       stripeClientId: process.env.STRIPE_CLIENT_ID,
       stripeOAuthRedirectUri: process.env.STRIPE_REDIRECT_URI,
-      stripePubKey: process.env.STRIPE_PUB_KEY
+      stripePubKey: process.env.STRIPE_PUB_KEY,
+        eas: {
+          projectId: "e8a88595-2bcb-4b64-978a-b6e247a3beed"
+      }
     },
-    plugins: [
+    plugins: 
       [
         "expo-location",
-        {
-          locationAlwaysAndWhenInUsePermission: "Allow $(PRODUCT_NAME) to use your location."
-        }
-      ]
-    ],
+        "expo-web-browser",
+        "expo-font"
+      ],
     scheme: "myapp",
     platforms: ["ios", "android"]
   }

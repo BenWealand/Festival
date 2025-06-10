@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, TextInput, Modal } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
 import { supabase } from '../lib/supabase';
 import { createPaymentIntentForLocation } from '../lib/stripe';
 import { useStripe } from '@stripe/stripe-react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import Constants from 'expo-constants';
 
@@ -22,11 +22,7 @@ export default function BalanceScreen() {
   const { user, session } = useAuth();
   const [balances, setBalances] = useState({});
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
       
@@ -63,7 +59,15 @@ export default function BalanceScreen() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        fetchData();
+      }
+    }, [user, fetchData])
+  );
 
   const validateAmount = (value) => {
     // Remove any non-numeric characters except decimal point

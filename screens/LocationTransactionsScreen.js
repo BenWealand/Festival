@@ -6,7 +6,7 @@ import { COLORS } from '../constants/theme';
 
 export default function LocationTransactionsScreen() {
   const route = useRoute();
-  const { locationId } = route.params; // Receive locationId
+  const { locationId } = route.params;
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -20,22 +20,14 @@ export default function LocationTransactionsScreen() {
   const fetchTransactions = async () => {
     try {
       setLoading(true);
-      // Fetch transactions for the specific location
       const { data, error } = await supabase
         .from('transactions')
         .select(`
           id,
           amount,
           created_at,
-          customer_name,
           status,
-          items:transaction_items (
-            quantity,
-            price_at_time,
-            menu_item:menu_items (
-              name
-            )
-          )
+          items
         `)
         .eq('location_id', locationId)
         .order('created_at', { ascending: false });
@@ -48,6 +40,11 @@ export default function LocationTransactionsScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
   };
 
   if (loading) {
@@ -63,6 +60,12 @@ export default function LocationTransactionsScreen() {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity 
+          style={styles.retryButton}
+          onPress={() => fetchTransactions()}
+        >
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -75,18 +78,31 @@ export default function LocationTransactionsScreen() {
       ) : (
         transactions.map((transaction) => (
           <View key={transaction.id} style={styles.transactionItem}>
-            <View style={styles.transactionInfo}>
-              <Text style={styles.customerName}>{transaction.customer_name}</Text>
-              <Text style={styles.transactionDate}>
-                {new Date(transaction.created_at).toLocaleString()}
-              </Text>
-              {transaction.items && transaction.items.map(item => (
-                <Text key={item.menu_item.name} style={styles.itemText}>
-                  {item.quantity} x {item.menu_item.name} @ ${(item.price_at_time * item.quantity / 100).toFixed(2)}
-                </Text>
-              ))}
+            <View style={styles.transactionHeader}>
+              <Text style={styles.transactionDate}>{formatDate(transaction.created_at)}</Text>
             </View>
-            <Text style={styles.totalAmount}>${(transaction.amount / 100).toFixed(2)}</Text>
+            
+            <View style={styles.transactionDetails}>
+              {transaction.items && transaction.items.length > 0 ? (
+                transaction.items.map((item, index) => (
+                  <View key={index} style={styles.itemRow}>
+                    <Text style={styles.itemText}>
+                      {item.quantity}x {item.name}
+                    </Text>
+                    <Text style={styles.itemPrice}>
+                      ${((item.price * item.quantity) / 100).toFixed(2)}
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.noItemsText}>No items in this transaction</Text>
+              )}
+            </View>
+
+            <View style={styles.transactionFooter}>
+              <Text style={styles.statusText}>Status: {transaction.status}</Text>
+              <Text style={styles.totalAmount}>Total: ${(transaction.amount / 100).toFixed(2)}</Text>
+            </View>
           </View>
         ))
       )}
@@ -116,43 +132,85 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: COLORS.surface.primary,
+    padding: 20,
   },
   errorText: {
-    color: COLORS.text.error,
+    color: COLORS.error,
     margin: 10,
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 20,
+    padding: 10,
+    backgroundColor: COLORS.primary,
+    borderRadius: 5,
+  },
+  retryButtonText: {
+    color: COLORS.text.white,
+    fontSize: 16,
   },
   title: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 20,
+    color: COLORS.text.white,
   },
   emptyText: {
     textAlign: 'center',
     marginTop: 20,
+    color: COLORS.text.muted,
   },
   transactionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border.primary,
+    backgroundColor: COLORS.surface.secondary,
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 16,
   },
-  transactionInfo: {
-    flex: 1,
-  },
-  customerName: {
-    fontSize: 16,
-    fontWeight: 'bold',
+  transactionHeader: {
+    marginBottom: 12,
   },
   transactionDate: {
     fontSize: 14,
-    color: COLORS.text.secondary,
+    color: COLORS.text.muted,
+  },
+  transactionDetails: {
+    marginBottom: 12,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
   },
   itemText: {
+    fontSize: 16,
+    color: COLORS.text.white,
+    flex: 1,
+  },
+  itemPrice: {
+    fontSize: 16,
+    color: COLORS.text.white,
+    marginLeft: 8,
+  },
+  noItemsText: {
     fontSize: 14,
+    color: COLORS.text.muted,
+    fontStyle: 'italic',
+  },
+  transactionFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: 12,
+  },
+  statusText: {
+    fontSize: 14,
+    color: COLORS.text.muted,
   },
   totalAmount: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: 'bold',
+    color: COLORS.primary,
   },
 }); 
