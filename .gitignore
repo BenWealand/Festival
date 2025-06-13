@@ -39,8 +39,3 @@ yarn-error.*
 # Prebuild directories
 /android
 /ios
-
-
-.env
-.env
-.env
