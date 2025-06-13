@@ -43,7 +43,9 @@
     },
     "plugins": [
       [
-        "expo-location"
+        "expo-location",
+         "expo-web-browser",
+        "expo-font"
       ]
     ],
     "dependencies": {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Button } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { COLORS } from '../constants/theme';
@@ -11,30 +11,37 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 // CardStack for Apple Wallet-style UI
 function CardStack({ data, onCardPress }) {
+  const navigation = useNavigation();
   const CARD_HEIGHT = 220;
   const CARD_HEADER_HEIGHT = 70;
-  const CARD_OFFSET = 55;
+  const CARD_OFFSET = 65;
   const CARD_BORDER_RADIUS = 18;
   const CARD_MARGIN = 16;
   const [expandedIndex, setExpandedIndex] = useState(null);
+  const [expandedTransactions, setExpandedTransactions] = useState([]);
+  const [expandedLoading, setExpandedLoading] = useState(false);
+  const [expandedError, setExpandedError] = useState(null);
 
-  // Reverse the data so the last card is rendered last (on top)
-  const reversedData = [...data].reverse();
+  // Add the coming soon card as the first item in the stack
+  const stackData = [
+    { id: '__coming_soon__', name: 'More Locations Coming Soon!', isComingSoon: true },
+    ...data
+  ];
+  const reversedData = [...stackData].reverse();
 
   const CARD_GRADIENTS = [
-    ['#f7b733', '#fc4a1a'], // orange to red
-    ['#43cea2', '#185a9d'], // green to blue
-    ['#ffaf7b', '#d76d77'], // peach to pink
-    ['#43e97b', '#38f9d7'], // green to teal
-    ['#fa709a', '#fee140'], // pink to yellow
-    ['#30cfd0', '#330867'], // teal to purple
-    ['#f7971e', '#ffd200'], // orange to yellow
-    ['#c471f5', '#fa71cd'], // purple to pink
+    ['#e6a02e', '#e64a1a'], // softer orange to red
+    ['#3db890', '#145a9d'], // softer green to blue
+    ['#e69f7b', '#c76d77'], // softer peach to pink
+    ['#3db97b', '#28d9c7'], // softer green to teal
+    ['#6a8dad', '#7fa6c7', '#b2cbe4'], // less vibrant blue gradient
+    ['#20afb0', '#230867'], // softer teal to purple
+    ['#d7871e', '#e6c200'], // softer orange to yellow
+    ['#b461d5', '#da61bd'], // softer purple to pink
   ];
 
   const CardItem = ({ item, index }) => {
     // index is for reversedData, so 0 is the bottom card (fully visible)
-    const originalIndex = data.length - 1 - index;
     const animatedStyle = useAnimatedStyle(() => {
       let top = index * CARD_OFFSET;
       let height = CARD_HEIGHT;
@@ -43,12 +50,12 @@ function CardStack({ data, onCardPress }) {
       let boxShadow = 6;
       let visible = true;
 
-      if (expandedIndex === originalIndex) {
+      if (expandedIndex === index) {
         top = 0;
         zIndex = 999;
         scale = 1.04;
         boxShadow = 12;
-      } else if (expandedIndex !== null && expandedIndex !== originalIndex) {
+      } else if (expandedIndex !== null && expandedIndex !== index) {
         // Hide all other cards when one is expanded
         visible = false;
       }
@@ -66,8 +73,11 @@ function CardStack({ data, onCardPress }) {
       };
     }, [expandedIndex]);
 
+    const isExpanded = expandedIndex === index;
+    const isAnyExpanded = expandedIndex !== null;
     return (
       <Animated.View
+        pointerEvents={isAnyExpanded && !isExpanded ? 'none' : 'auto'}
         style={[
           {
             borderRadius: CARD_BORDER_RADIUS,
@@ -77,13 +87,13 @@ function CardStack({ data, onCardPress }) {
             shadowRadius: 8,
             overflow: 'hidden',
             borderWidth: 1,
-            borderColor: COLORS.border,
+            borderColor: 'black',
           },
           animatedStyle,
         ]}
       >
         <LinearGradient
-          colors={CARD_GRADIENTS[index % CARD_GRADIENTS.length]}
+          colors={item.isComingSoon ? ['#ff4e8e', '#ff6bb5'] : CARD_GRADIENTS[index % CARD_GRADIENTS.length]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{ flex: 1, borderRadius: CARD_BORDER_RADIUS }}
@@ -92,36 +102,51 @@ function CardStack({ data, onCardPress }) {
             style={{ flex: 1 }}
             activeOpacity={0.95}
             onPress={() => {
-              if (expandedIndex === originalIndex) {
-                setExpandedIndex(null); // Collapse
-              } else {
-                setExpandedIndex(originalIndex); // Expand
+              if (!item.isComingSoon) {
+                if (expandedIndex === index) {
+                  setExpandedIndex(null); // Collapse
+                } else {
+                  setExpandedIndex(index); // Expand
+                  // Fetch recent transactions for this location
+                  setExpandedLoading(true);
+                  setExpandedError(null);
+                  setExpandedTransactions([]);
+                  fetchRecentTransactions(item.id);
+                }
               }
             }}
           >
             <View style={{ flex: 1 }}>
-              {/* Header: Always visible */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, height: CARD_HEADER_HEIGHT, justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 20, fontWeight: '700', color: COLORS.text.white, flex: 1 }} numberOfLines={1} ellipsizeMode="tail">
-                  {item.name}
-                </Text>
-                <Text style={{ fontSize: 16, color: COLORS.text.muted, marginLeft: 12, fontWeight: '600', flexShrink: 0 }} numberOfLines={1} ellipsizeMode="tail">
-                  ${(item.points / 100).toFixed(2)}
-                </Text>
-              </View>
-              {/* Expanded details: Only visible when expanded */}
-              {expandedIndex === originalIndex && (
-                <View style={{ padding: 20, borderTopWidth: 1, borderTopColor: COLORS.border, alignItems: 'center', justifyContent: 'center', flex: 1 }}>
-                  {item.logo_url ? (
-                    <Image
-                      source={{ uri: item.logo_url }}
-                      style={{ width: 64, height: 64, borderRadius: 16, marginBottom: 16 }}
-                    />
-                  ) : null}
-                  <Text style={{ color: COLORS.text.white, fontSize: 16, textAlign: 'center' }}>
-                    More details can go here!
+              {item.isComingSoon ? (
+                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.text.white, textAlign: 'center' }}>
+                    {item.name}
                   </Text>
                 </View>
+              ) : (
+                <>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: CARD_HEADER_HEIGHT }}>
+                    <Text style={{ fontSize: 20, fontWeight: '700', color: COLORS.text.white, flex: 1 }} numberOfLines={1} ellipsizeMode="tail">
+                      {item.name}
+                    </Text>
+                    <Text style={{ fontSize: 16, color: COLORS.text.white, marginLeft: 12, fontWeight: '700', flexShrink: 0 }} numberOfLines={1} ellipsizeMode="tail">
+                      ${(item.points / 100).toFixed(2)}
+                    </Text>
+                  </View>
+                  {/* Expanded details: Only visible when expanded */}
+                  {expandedIndex === index && (
+                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+                      {item.logo_url ? (
+                        <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: COLORS.surface.primary, justifyContent: 'center', alignItems: 'center', marginTop: 16, marginBottom: 16 }}>
+                          <Image
+                            source={{ uri: item.logo_url }}
+                            style={{ width: 64, height: 64, borderRadius: 32 }}
+                          />
+                        </View>
+                      ) : null}
+                    </View>
+                  )}
+                </>
               )}
             </View>
           </TouchableOpacity>
@@ -130,14 +155,108 @@ function CardStack({ data, onCardPress }) {
     );
   };
 
+  // Fetch recent transactions for a location
+  const fetchRecentTransactions = async (locationId) => {
+    try {
+      setExpandedLoading(true);
+      setExpandedError(null);
+      const { data, error } = await supabase
+        .from('transactions')
+        .select(`id, amount, created_at, customer_name, status, items`)
+        .eq('location_id', locationId)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      if (error) throw error;
+      setExpandedTransactions(data);
+    } catch (err) {
+      setExpandedError('Failed to load recent transactions');
+    } finally {
+      setExpandedLoading(false);
+    }
+  };
+
   // Container height for stacking
   const containerHeight = CARD_HEIGHT + (reversedData.length - 1) * CARD_OFFSET + 2 * CARD_MARGIN;
 
   return (
-    <View style={{ height: containerHeight, marginTop: 32, backgroundColor: COLORS.surface.primary }}>
-      {reversedData.map((item, index) => (
-        <CardItem item={item} index={index} key={item.id} />
-      ))}
+    <View style={{ marginTop: 32, backgroundColor: COLORS.surface.primary }}>
+      <View style={{ height: containerHeight }}>
+        {reversedData.map((item, index) => (
+          <React.Fragment key={item.id}>
+            <CardItem item={item} index={index} />
+            {/* Expanded card details immediately below the expanded card */}
+            {expandedIndex === index && !item.isComingSoon && (
+              <View style={{ marginTop: 250, marginHorizontal: CARD_MARGIN }}>
+                {/* Recent Transactions Row */}
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ fontSize: 18, fontWeight: 'bold', color: COLORS.text.white, marginBottom: 8 }}>Recent Transactions</Text>
+                  {expandedLoading ? (
+                    <ActivityIndicator size="small" color={COLORS.text.white} />
+                  ) : expandedError ? (
+                    <Text style={{ color: COLORS.error }}>{expandedError}</Text>
+                  ) : expandedTransactions.length === 0 ? (
+                    <Text style={{ color: COLORS.text.muted }}>No recent transactions.</Text>
+                  ) : (
+                    expandedTransactions.slice(0, 2).map((tx) => (
+                      <View key={tx.id} style={{ borderRadius: 8, padding: 6, marginBottom: 5, backgroundColor: COLORS.surface.card, minHeight: 20, justifyContent: 'center' }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                          <Text style={{ color: COLORS.text.muted, fontSize: 11 }}>{new Date(tx.created_at).toLocaleDateString()}</Text>
+                          {/* Only show status if not completed */}
+                          {tx.status !== 'completed' && (
+                            <Text style={{ color: COLORS.text.white, fontWeight: 'bold', fontSize: 12 }}>{tx.status}</Text>
+                          )}
+                        </View>
+                        {/* Show what was bought if items exist */}
+                        {Array.isArray(tx.items) && tx.items.length > 0 && (
+                          <View style={{ marginTop: 0 }}>
+                            {tx.items.map((item, idx) => (
+                              <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 1, minHeight: 18 }}>
+                                <Text style={{ color: COLORS.text.muted, fontSize: 12, minWidth: 24, textAlign: 'left', flexShrink: 0 }}>{item.quantity}x</Text>
+                                <Text style={{ color: COLORS.text.white, fontSize: 16, flex: 1, textAlign: 'center', fontWeight: 'bold' }}>{item.name}</Text>
+                                <Text style={{ color: COLORS.text.white, fontSize: 13, minWidth: 40, textAlign: 'right', fontWeight: 'bold' }}>${((item.price * item.quantity) / 100).toFixed(2)}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        )}
+                        {/* Show total price once per transaction, only if more than one item */}
+                        {Array.isArray(tx.items) && tx.items.length > 1 && (
+                          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', marginTop: 2 }}>
+                            <Text style={{ color: COLORS.text.white, fontSize: 13, fontWeight: 'bold' }}>${(tx.amount / 100).toFixed(2)}</Text>
+                          </View>
+                        )}
+                      </View>
+                    ))
+                  )}
+                </View>
+                {/* See all transactions link */}
+                {expandedTransactions.length > 2 && (
+                  <TouchableOpacity onPress={() => navigation.navigate('GlobalTransactions', { locationId: item.id })} style={{ alignItems: 'center', marginTop: 12, marginBottom: 24 }}>
+                    <Text style={{ color: COLORS.text.white, fontWeight: 'bold', textDecorationLine: 'underline', fontSize: 14 }}>
+                      All Transactions
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                {/* View Menu Button Row */}
+                <View style={{ marginBottom: 18 }}>
+                  <Button
+                    title="View Menu"
+                    color={COLORS.primary}
+                    onPress={() => navigation.navigate('LocationMenu', { locationId: item.id })}
+                  />
+                </View>
+                {/* Deposit More Funds Button Row */}
+                <View>
+                  <Button
+                    title="Deposit More Funds"
+                    color={'#3ec6e0'}
+                    onPress={() => navigation.navigate('Balance', { locationId: item.id })}
+                  />
+                </View>
+              </View>
+            )}
+          </React.Fragment>
+        ))}
+      </View>
     </View>
   );
 }
@@ -531,7 +650,15 @@ export default function HomeScreen() {
         ) : (
           <CardStack
             data={businessData.locations}
-            onCardPress={(location) => navigation.navigate('LocationMenu', { locationId: location.id })}
+            onCardPress={(location, action) => {
+              if (action === 'balances') {
+                navigation.navigate('Balances', { locationId: location.id });
+              } else if (action === 'all-transactions') {
+                navigation.navigate('GlobalTransactions', { locationId: location.id });
+              } else {
+                navigation.navigate('LocationMenu', { locationId: location.id });
+              }
+            }}
           />
         )}
       </View>
