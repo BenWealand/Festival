@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Modal, Scrol
 import { FontAwesome } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { COLORS } from '../constants/theme';
+import { useNavigation } from '@react-navigation/native';
 
 // Sample data - replace with actual data from your backend
 const sampleMessages = [
@@ -63,6 +64,7 @@ const categories = [
 ];
 
 export default function InboxScreen() {
+  const navigation = useNavigation();
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [messages, setMessages] = useState(sampleMessages);
   const [selectedMessage, setSelectedMessage] = useState(null);
@@ -184,26 +186,35 @@ export default function InboxScreen() {
   );
 
   return (
-    <View style={styles.container}>
-      <View style={styles.categoriesContainer}>
-        <FlatList
-          horizontal
-          data={categories}
-          renderItem={renderCategory}
-          keyExtractor={item => item.id}
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoriesList}
-        />
+    <View style={{ flex: 1, backgroundColor: COLORS.surface.primary }}>
+      {/* Custom Header */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface.secondary, paddingTop: 36, paddingBottom: 12, paddingHorizontal: 16 }}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 16 }}>
+          <FontAwesome name="arrow-left" size={26} color={COLORS.primary} />
+        </TouchableOpacity>
+        <Text style={{ color: COLORS.text.white, fontSize: 22, fontWeight: 'bold', flex: 1 }}>Inbox</Text>
       </View>
+      <View style={styles.container}>
+        <View style={styles.categoriesContainer}>
+          <FlatList
+            horizontal
+            data={categories}
+            renderItem={renderCategory}
+            keyExtractor={item => item.id}
+            showsHorizontalScrollIndicator={false}
+            style={styles.categoriesList}
+          />
+        </View>
 
-      <FlatList
-        data={filteredMessages}
-        renderItem={renderMessage}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.messagesList}
-      />
+        <FlatList
+          data={filteredMessages}
+          renderItem={renderMessage}
+          keyExtractor={item => item.id}
+          contentContainerStyle={styles.messagesList}
+        />
 
-      {renderMessageModal()}
+        {renderMessageModal()}
+      </View>
     </View>
   );
 }

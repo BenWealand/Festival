@@ -211,6 +211,149 @@ app.get('/api/stripe-callback', async (req, res) => {
     }
 });
 
+// --- Endpoint: Create Transaction (for balance-based orders) ---
+app.post('/create-transaction', express.json(), async (req, res) => {
+    console.log('=== START CREATE TRANSACTION ===');
+    console.log('Request body:', req.body);
+
+    const { userId, locationId, items, tip } = req.body;
+    if (!userId || !locationId || !items || items.length === 0) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    // Calculate subtotal and total
+    const subtotal = items.reduce((sum, item) => sum + item.price * (item.quantity || 1), 0);
+    const total = subtotal + (tip || 0);
+
+    // Initialize Supabase client
+    const supabaseServiceRole = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+            detectSessionInUrl: false,
+        },
+    });
+
+    // Check and deduct balance
+    const { data: balanceRow, error: balanceError } = await supabaseServiceRole
+        .from('balances')
+        .select('balance')
+        .eq('user_id', userId)
+        .eq('location_id', locationId)
+        .single();
+    if (balanceError || !balanceRow || Number(balanceRow.balance) < total) {
+        return res.status(400).json({ error: 'Insufficient balance' });
+    }
+    await supabaseServiceRole
+        .from('balances')
+        .update({ balance: Number(balanceRow.balance) - total })
+        .eq('user_id', userId)
+        .eq('location_id', locationId);
+
+    // Create transaction
+    const { data: transaction, error: transactionError } = await supabaseServiceRole
+        .from('transactions')
+        .insert({
+            location_id: locationId,
+            customer_name: userId, // or fetch/display actual name
+            amount: subtotal,
+            tip_amount: tip,
+            status: 'in_progress',
+            items: items.map(item => ({
+                id: item.id,
+                name: item.name,
+                price: item.price,
+                quantity: item.quantity || 1
+            }))
+        })
+        .select()
+        .single();
+    if (transactionError) return res.status(500).json({ error: transactionError.message });
+
+    res.json({ success: true, transactionId: transaction.id });
+});
+
+// --- Endpoint: Complete Order (mark as complete and assign bartender) ---
+app.post('/complete-order', express.json(), async (req, res) => {
+    const { orderId, bartenderId } = req.body;
+    console.log('Received /complete-order:', { orderId, bartenderId });
+
+    if (!orderId || !bartenderId) {
+        console.log('Missing orderId or bartenderId');
+        return res.status(400).json({ error: 'Missing orderId or bartenderId' });
+    }
+
+    const supabaseServiceRole = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+            detectSessionInUrl: false,
+        },
+    });
+
+    // Update transaction status and assign bartender
+    const { data, error } = await supabaseServiceRole
+        .from('transactions')
+        .update({ status: 'complete', bartender_id: bartenderId })
+        .eq('id', orderId)
+        .select()
+        .single();
+
+    if (error) {
+        console.error('Error marking order as complete:', error);
+        return res.status(500).json({ error: error.message });
+    }
+
+    // Optionally: create a tip record if tip_amount > 0
+    if (data.tip_amount && data.tip_amount > 0) {
+        const { error: tipError } = await supabaseServiceRole
+            .from('tips')
+            .insert({
+                employee_id: bartenderId,
+                transaction_id: orderId,
+                amount: data.tip_amount
+            });
+        if (tipError) {
+            console.error('Error inserting tip:', tipError);
+            return res.status(500).json({ error: tipError.message });
+        }
+    }
+
+    res.json({ success: true });
+});
+
+// --- Endpoint: Redeem Order (mark as redeemed) ---
+app.post('/redeem-order', express.json(), async (req, res) => {
+    const { orderId } = req.body;
+    console.log('Received /redeem-order:', { orderId });
+
+    if (!orderId) {
+        console.log('Missing orderId');
+        return res.status(400).json({ error: 'Missing orderId' });
+    }
+
+    const supabaseServiceRole = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession: false,
+            detectSessionInUrl: false,
+        },
+    });
+
+    // Update transaction status and set redeemed_at
+    const { error } = await supabaseServiceRole
+        .from('transactions')
+        .update({ status: 'redeemed', redeemed_at: new Date().toISOString() })
+        .eq('id', orderId);
+
+    if (error) {
+        console.error('Error marking order as redeemed:', error);
+        return res.status(500).json({ error: error.message });
+    }
+
+    res.json({ success: true });
+});
+
 // Create HTTPS server with self-signed certificates
 const httpsOptions = {
   key: fs.readFileSync(`${__dirname}/certs/key.pem`),

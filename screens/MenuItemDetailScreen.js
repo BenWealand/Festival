@@ -1,61 +1,11 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
-import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native';
 import { COLORS } from '../constants/theme';
 import { FontAwesome } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase'; // Assuming supabase client is available
 import { useAuth } from '../context/AuthContext'; // Assuming auth context is available
 
-export default function MenuItemDetailScreen() {
-  const route = useRoute();
-  const navigation = useNavigation();
-  const { item, locationId } = route.params; // Receive item data and locationId
-  const { user } = useAuth();
-  const [isPurchasing, setIsPurchasing] = useState(false);
-
-  const handlePurchase = async () => {
-    if (!user) {
-      Alert.alert('Error', 'You must be logged in to purchase items.');
-      return;
-    }
-
-    if (!locationId || !item?.id || !item?.price) {
-        Alert.alert('Error', 'Missing item or location information.');
-        return;
-    }
-
-    setIsPurchasing(true);
-    try {
-        // --- Use the Supabase purchase_item function for atomic operation ---
-        const { data, error } = await supabase.rpc('purchase_item', {
-            p_user_id: user.id,
-            p_location_id: locationId,
-            p_item_id: item.id,
-            p_item_price: item.price, // Assuming price is stored in cents
-            p_item_name: item.name
-        });
-
-        if (error) {
-            // Check for the specific insufficient balance error from the function
-            if (error.message === 'Insufficient Balance') {
-                Alert.alert('Insufficient Balance', 'You do not have enough balance to purchase this item.');
-            } else {
-                throw error; // Rethrow other errors
-            }
-        } else {
-            Alert.alert('Success', `${item.name} purchased successfully!`);
-            // Optionally navigate back or update UI
-            navigation.goBack();
-        }
-
-    } catch (error) {
-      console.error('Error during purchase:', error);
-      Alert.alert('Purchase Failed', error.message);
-    } finally {
-      setIsPurchasing(false);
-    }
-  };
-
+export default function MenuItemDetailScreen({ item, locationId, addToCart, setCurrentScreen }) {
   return (
     <View style={styles.container}>
       {/* Item Image Placeholder */}
@@ -66,21 +16,25 @@ export default function MenuItemDetailScreen() {
       <Text style={styles.itemName}>{item?.name || 'Item Name'}</Text>
       <Text style={styles.itemPrice}>${((item?.price || 0) / 100).toFixed(2)}</Text>
 
-      <TouchableOpacity 
-        style={styles.purchaseButton}
-        onPress={handlePurchase}
-        disabled={isPurchasing}
-      >
-        {isPurchasing ? (
-          <ActivityIndicator color={COLORS.text.white} />
-        ) : (
-          <Text style={styles.buttonText}>Purchase</Text>
-        )}
-      </TouchableOpacity>
+      {addToCart ? (
+        <TouchableOpacity
+          style={styles.purchaseButton}
+          onPress={() => {
+            addToCart(item);
+            setCurrentScreen('LocationMenu');
+          }}
+        >
+          <Text style={styles.buttonText}>Add to Order</Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity style={[styles.purchaseButton, { backgroundColor: COLORS.surface.secondary }]} disabled>
+          <Text style={styles.buttonText}>Add to Order (unavailable)</Text>
+        </TouchableOpacity>
+      )}
 
       <TouchableOpacity 
         style={styles.backButton}
-        onPress={() => navigation.goBack()}
+        onPress={() => setCurrentScreen('LocationMenu')}
       >
         <Text style={styles.buttonText}>Go Back</Text>
       </TouchableOpacity>

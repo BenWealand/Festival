@@ -41,14 +41,16 @@ export default function Auth() {
   async function signInWithEmail() {
     setLoading(true)
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: email,
         password: password,
       })
-
+      console.log('Sign in response:', data, 'Error:', error);
       if (error) throw error
-      
-      // Navigation will be handled by the parent component through the session state
+      // If sign-in is successful, clear the form
+      setEmail('');
+      setPassword('');
+      // The AuthProvider will update the user and the app will re-render
     } catch (error) {
       Alert.alert('Error', error.message)
     } finally {
@@ -117,7 +119,7 @@ export default function Auth() {
         errorMessage = 'This email is already registered. Please sign in instead.';
       } else if (error.message === 'Error creating user profile') {
         errorMessage = 'Account created but profile setup failed. Please try again.';
-      } else if (error.message.includes('Database error')) {
+      } else if (typeof error.message === 'string' && error.message.includes('Database error')) {
         errorMessage = 'Unable to create account. Please try again later.';
       }
 
@@ -209,8 +211,11 @@ const styles = StyleSheet.create({
   button: {
     backgroundColor: COLORS.primary,
     padding: 16,
-    borderRadius: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     alignItems: 'center',
+    marginBottom: 12,
   },
   buttonText: {
     color: COLORS.text.white,
@@ -220,6 +225,7 @@ const styles = StyleSheet.create({
   switchButton: {
     marginTop: 20,
     alignItems: 'center',
+    marginBottom: 8,
   },
   switchText: {
     color: COLORS.text.white,
@@ -229,7 +235,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     padding: 8,
     backgroundColor: COLORS.surface.secondary,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   requirementText: {
     color: COLORS.text.muted,

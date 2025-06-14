@@ -30,6 +30,7 @@ export default function AnalyticsScreen() {
     amountLeftToRedeem: 0,
     totalRevenueDeposits: 0
   });
+  const [tipsByEmployee, setTipsByEmployee] = useState([]);
 
   useEffect(() => {
     fetchAnalytics();
@@ -108,6 +109,22 @@ export default function AnalyticsScreen() {
       if (totalDepositsError) throw totalDepositsError;
 
       const totalRevenueDeposits = totalDepositsData.reduce((sum, item) => sum + item.amount, 0);
+
+      // Fetch tips by employee (join through transactions for location)
+      const { data: tipsData, error: tipsError } = await supabase
+        .from('tips')
+        .select('amount, employee_id, employees(name), transactions(location_id)')
+        .eq('transactions.location_id', location.id);
+      if (tipsError) throw tipsError;
+      // Group and sum tips by employee
+      const tipsMap = {};
+      for (const tip of tipsData) {
+        const empId = tip.employee_id;
+        const empName = tip.employees?.name || 'Unknown';
+        if (!tipsMap[empId]) tipsMap[empId] = { name: empName, total: 0 };
+        tipsMap[empId].total += tip.amount;
+      }
+      setTipsByEmployee(Object.values(tipsMap));
 
       setAnalytics({
         dailyRedemptions: dailyRedemptionsData.map(day => ({
@@ -195,6 +212,21 @@ export default function AnalyticsScreen() {
             <Text style={styles.metricLabel}>Total Revenue</Text>
           </View>
         </View>
+      </View>
+
+      {/* Tips by Employee */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Tips by Employee</Text>
+        {tipsByEmployee.length === 0 ? (
+          <Text style={styles.noteText}>No tips recorded yet.</Text>
+        ) : (
+          tipsByEmployee.map((emp, idx) => (
+            <View key={idx} style={styles.revenueRow}>
+              <Text style={styles.itemName}>{emp.name}</Text>
+              <Text style={styles.amountText}>${(emp.total / 100).toFixed(2)}</Text>
+            </View>
+          ))
+        )}
       </View>
 
       {/* Daily Redemptions */}

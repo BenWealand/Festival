@@ -4,9 +4,10 @@ import { FontAwesome } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { COLORS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import Animated, { useSharedValue, useAnimatedStyle, useAnimatedScrollHandler, withSpring, interpolate, Extrapolate, runOnJS } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
 // import { PanGestureHandler } from 'react-native-gesture-handler';
 
 // CardStack for Apple Wallet-style UI
@@ -15,8 +16,8 @@ function CardStack({ data, onCardPress }) {
   const CARD_HEIGHT = 220;
   const CARD_HEADER_HEIGHT = 70;
   const CARD_OFFSET = 65;
-  const CARD_BORDER_RADIUS = 18;
-  const CARD_MARGIN = 16;
+  const CARD_BORDER_RADIUS = 12;
+  const CARD_MARGIN = 12;
   const [expandedIndex, setExpandedIndex] = useState(null);
   const [expandedTransactions, setExpandedTransactions] = useState([]);
   const [expandedLoading, setExpandedLoading] = useState(false);
@@ -81,13 +82,11 @@ function CardStack({ data, onCardPress }) {
         style={[
           {
             borderRadius: CARD_BORDER_RADIUS,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 4 },
-            shadowOpacity: 0.12,
-            shadowRadius: 8,
-            overflow: 'hidden',
             borderWidth: 1,
-            borderColor: 'black',
+            borderColor: COLORS.border,
+            marginBottom: CARD_MARGIN,
+            marginHorizontal: CARD_MARGIN,
+            backgroundColor: COLORS.surface.card,
           },
           animatedStyle,
         ]}
@@ -99,7 +98,7 @@ function CardStack({ data, onCardPress }) {
           style={{ flex: 1, borderRadius: CARD_BORDER_RADIUS }}
         >
           <TouchableOpacity
-            style={{ flex: 1 }}
+            style={{ flex: 1, borderRadius: CARD_BORDER_RADIUS }}
             activeOpacity={0.95}
             onPress={() => {
               if (!item.isComingSoon) {
@@ -116,7 +115,7 @@ function CardStack({ data, onCardPress }) {
               }
             }}
           >
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, borderRadius: CARD_BORDER_RADIUS }}>
               {item.isComingSoon ? (
                 <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
                   <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.text.white, textAlign: 'center' }}>
@@ -203,7 +202,18 @@ function CardStack({ data, onCardPress }) {
                           <Text style={{ color: COLORS.text.muted, fontSize: 11 }}>{new Date(tx.created_at).toLocaleDateString()}</Text>
                           {/* Only show status if not completed */}
                           {tx.status !== 'completed' && (
-                            <Text style={{ color: COLORS.text.white, fontWeight: 'bold', fontSize: 12 }}>{tx.status}</Text>
+                            <Text style={[
+                              styles.statusText,
+                              tx.status === 'redeemed'
+                                ? { color: COLORS.secondary }
+                                : tx.status === 'completed' || tx.status === 'complete'
+                                ? { color: COLORS.primary }
+                                : tx.status === 'in_progress'
+                                ? { color: COLORS.text.white }
+                                : { color: COLORS.text.muted }
+                            ]}>
+                              {tx.status.replace('_', ' ')}
+                            </Text>
                           )}
                         </View>
                         {/* Show what was bought if items exist */}
@@ -230,7 +240,7 @@ function CardStack({ data, onCardPress }) {
                 </View>
                 {/* See all transactions link */}
                 {expandedTransactions.length > 2 && (
-                  <TouchableOpacity onPress={() => navigation.navigate('GlobalTransactions', { locationId: item.id })} style={{ alignItems: 'center', marginTop: 12, marginBottom: 24 }}>
+                  <TouchableOpacity onPress={() => navigation.navigate('GlobalTransactions')} style={{ alignItems: 'center', marginTop: 12, marginBottom: 24 }}>
                     <Text style={{ color: COLORS.text.white, fontWeight: 'bold', textDecorationLine: 'underline', fontSize: 14 }}>
                       All Transactions
                     </Text>
@@ -249,7 +259,7 @@ function CardStack({ data, onCardPress }) {
                   <Button
                     title="Deposit More Funds"
                     color={'#3ec6e0'}
-                    onPress={() => navigation.navigate('Balance', { locationId: item.id })}
+                    onPress={() => navigation.navigate('Balance')}
                   />
                 </View>
               </View>
@@ -263,7 +273,14 @@ function CardStack({ data, onCardPress }) {
 
 export default function HomeScreen() {
   const navigation = useNavigation();
-  const [businessData, setBusinessData] = useState(null);
+  const [businessData, setBusinessData] = useState({
+    locations: [],
+    amount_redeemed: 0,
+    total_transactions: 0,
+    average_rating: 0,
+    amount_left_to_redeem: 0,
+    total_revenue_deposits: 0
+  });
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [recentDeposits, setRecentDeposits] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -272,15 +289,21 @@ export default function HomeScreen() {
   const { user } = useAuth();
 
   const fetchData = useCallback(async () => {
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
-      console.log('Fetching data for user:', user?.id);
+      setError(null);
+      console.log('Fetching data for user:', user.id);
       
       // First check if user is an owner
       const { data: ownedLocation, error: ownerError } = await supabase
         .from('locations')
         .select('id')
-        .eq('owner_id', user?.id)
+        .eq('owner_id', user.id)
         .single();
 
       console.log('Owner check result:', { ownedLocation, ownerError });
@@ -319,7 +342,7 @@ export default function HomeScreen() {
 
         if (totalBalanceError) throw totalBalanceError;
 
-        const amountLeftToRedeem = totalBalanceData.reduce((sum, item) => sum + item.balance, 0);
+        const amountLeftToRedeem = totalBalanceData?.reduce((sum, item) => sum + (item?.balance || 0), 0) || 0;
 
         // Fetch recent transactions
         const { data: transactions, error: transactionsError } = await supabase
@@ -338,7 +361,7 @@ export default function HomeScreen() {
         if (transactionsError) throw transactionsError;
 
         // Fetch user names for transactions
-        const transactionUserIds = transactions.map(t => t.customer_name);
+        const transactionUserIds = transactions?.map(t => t.customer_name).filter(Boolean) || [];
         const { data: transactionProfiles, error: transactionProfilesError } = await supabase
           .from('profiles')
           .select('id, full_name')
@@ -347,10 +370,10 @@ export default function HomeScreen() {
         if (transactionProfilesError) throw transactionProfilesError;
 
         // Map user names to transactions
-        const transactionsWithNames = transactions.map(transaction => ({
+        const transactionsWithNames = transactions?.map(transaction => ({
           ...transaction,
           user_name: transactionProfiles?.find(p => p.id === transaction.customer_name)?.full_name || 'Unknown Customer'
-        }));
+        })) || [];
 
         // Fetch total deposits for the location
         const { data: totalDepositsData, error: totalDepositsError } = await supabase
@@ -360,7 +383,7 @@ export default function HomeScreen() {
 
         if (totalDepositsError) throw totalDepositsError;
 
-        const totalRevenueDeposits = totalDepositsData.reduce((sum, item) => sum + item.amount, 0);
+        const totalRevenueDeposits = totalDepositsData?.reduce((sum, item) => sum + (item?.amount || 0), 0) || 0;
 
         // Fetch recent deposits
         const { data: recentDeposits, error: recentDepositsError } = await supabase
@@ -378,7 +401,7 @@ export default function HomeScreen() {
         if (recentDepositsError) throw recentDepositsError;
 
         // Fetch user names for deposits
-        const depositUserIds = recentDeposits.map(d => d.user_id);
+        const depositUserIds = recentDeposits?.map(d => d.user_id).filter(Boolean) || [];
         const { data: depositProfiles, error: depositProfilesError } = await supabase
           .from('profiles')
           .select('id, full_name')
@@ -387,16 +410,16 @@ export default function HomeScreen() {
         if (depositProfilesError) throw depositProfilesError;
 
         // Map user names to deposits
-        const depositsWithNames = recentDeposits.map(deposit => ({
+        const depositsWithNames = recentDeposits?.map(deposit => ({
           ...deposit,
           user_name: depositProfiles?.find(p => p.id === deposit.user_id)?.full_name || 'Unknown Customer'
-        }));
+        })) || [];
 
         setBusinessData({
           ...business,
-          amount_redeemed: business.business_metrics?.total_revenue || 0,
-          total_transactions: business.business_metrics?.total_transactions || 0,
-          average_rating: business.business_metrics?.average_rating || 0,
+          amount_redeemed: business?.business_metrics?.total_revenue || 0,
+          total_transactions: business?.business_metrics?.total_transactions || 0,
+          average_rating: business?.business_metrics?.average_rating || 0,
           amount_left_to_redeem: amountLeftToRedeem,
           total_revenue_deposits: totalRevenueDeposits,
         });
@@ -407,7 +430,7 @@ export default function HomeScreen() {
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('id')
-          .eq('id', user?.id)
+          .eq('id', user.id)
           .single();
 
         if (profileError) throw profileError;
@@ -428,12 +451,12 @@ export default function HomeScreen() {
         if (locationsError) throw locationsError;
 
         setBusinessData({
-          locations: locations.map(location => ({
+          locations: locations?.map(location => ({
             id: location.id,
             name: location.name,
             logo_url: location.logo_url,
-            points: location.balances[0]?.balance || 0
-          }))
+            points: location.balances?.[0]?.balance || 0
+          })) || []
         });
       }
     } catch (error) {
@@ -444,13 +467,13 @@ export default function HomeScreen() {
     }
   }, [user]);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (user) {
-        fetchData();
-      }
-    }, [user, fetchData])
-  );
+  useEffect(() => {
+    if (user?.id) {
+      fetchData();
+    } else {
+      setLoading(false);
+    }
+  }, [user, fetchData]);
 
   if (loading) {
     console.log('Rendering loading state');
@@ -469,7 +492,7 @@ export default function HomeScreen() {
         <Text style={styles.errorText}>{error}</Text>
         <TouchableOpacity 
           style={styles.retryButton}
-          onPress={() => setLoading(true)}
+          onPress={() => fetchData()}
         >
           <Text style={styles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
@@ -489,52 +512,56 @@ export default function HomeScreen() {
     );
 
     return (
-      <ScrollView style={styles.container}>
-        {/* Business Header */}
-        <View style={styles.header}>
-          {businessData?.logo_url ? (
-            <Image 
-              source={{ uri: businessData.logo_url }} 
-              style={styles.logo}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={styles.logoPlaceholder}>
-              <FontAwesome name="building" size={32} color={COLORS.text.white} />
+      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.surface.primary }}>
+        {/* Header with Profile and Inbox buttons */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, marginBottom: 8 }}>
+          <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={{ padding: 8 }}>
+            <FontAwesome name="user" size={28} color={COLORS.primary} />
+          </TouchableOpacity>
+          <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.text.white, flex: 1, textAlign: 'center' }}>Home</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Inbox')} style={{ padding: 8 }}>
+            <FontAwesome name="envelope" size={26} color={COLORS.primary} />
+          </TouchableOpacity>
+        </View>
+        <ScrollView style={styles.container}>
+          {/* Business Header */}
+          <View style={styles.header}>
+            {businessData?.logo_url ? (
+              <Image 
+                source={{ uri: businessData.logo_url }} 
+                style={styles.logoLarge}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={styles.logoPlaceholderLarge}>
+                <FontAwesome name="building" size={48} color={COLORS.text.white} />
+              </View>
+            )}
+            <Text style={styles.businessNameLarge}>{businessData?.name}</Text>
+          </View>
+
+          {/* Performance Metrics */}
+          <View style={[styles.sectionBox, styles.statsRow]}>
+            <View style={styles.statBox}>
+              <Text style={styles.metricValue}>${(businessData?.total_revenue_deposits / 100 || 0).toFixed(2)}</Text>
+              <Text style={styles.metricLabel}>Total Deposited</Text>
             </View>
-          )}
-          <Text style={styles.businessName}>{businessData?.name}</Text>
-        </View>
-
-        {/* Performance Metrics */}
-        <View style={styles.metricsContainer}>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>${(businessData?.total_revenue_deposits / 100 || 0).toFixed(2)}</Text>
-            <Text style={styles.metricLabel}>Total Revenue (Deposits)</Text>
+            <View style={styles.statBox}>
+              <Text style={styles.metricValue}>${(businessData?.amount_left_to_redeem / 100 || 0).toFixed(2)}</Text>
+              <Text style={styles.metricLabel}>Left to Redeem</Text>
+            </View>
+            <View style={styles.statBox}>
+              <Text style={styles.metricValue}>{businessData?.total_transactions || 0}</Text>
+              <Text style={styles.metricLabel}>Redemptions</Text>
+            </View>
           </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>${(businessData?.amount_left_to_redeem / 100 || 0).toFixed(2)}</Text>
-            <Text style={styles.metricLabel}>Left to Redeem</Text>
-          </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>{businessData?.total_transactions || 0}</Text>
-            <Text style={styles.metricLabel}>Total Redemptions</Text>
-          </View>
-        </View>
 
-        {/* Note about Amount Redeemed */}
-        <View style={styles.noteContainer}>
-          <Text style={styles.noteText}>Amount Redeemed refers to the total value of items purchased using customer balances.</Text>
-        </View>
-
-        {/* Quick Actions */}
-        <View style={styles.quickActionsContainer}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          {/* Quick Actions */}
           <View style={styles.quickActionsGrid}>
             <QuickAction 
-              icon="plus-circle" 
-              title="Add Item" 
-              onPress={() => navigation.navigate('BusinessMenu')}
+              icon="list" 
+              title="View Menu" 
+              onPress={() => navigation.navigate('LocationMenu')}
             />
             <QuickAction 
               icon="users" 
@@ -547,121 +574,113 @@ export default function HomeScreen() {
               onPress={() => navigation.navigate('Analytics')}
             />
             <QuickAction 
-              icon="cog" 
-              title="Settings" 
-              onPress={() => navigation.navigate('Settings')}
+              icon="shopping-basket" 
+              title="Active Orders" 
+              onPress={() => navigation.navigate('ActiveOrders')}
             />
           </View>
-        </View>
 
-        {/* Recent Deposits */}
-        <View style={styles.transactionsContainer}>
-          <Text style={styles.sectionTitle}>Recent Deposits</Text>
-          {recentDeposits.length === 0 ? (
-            <Text style={styles.emptyText}>No recent deposits.</Text>
-          ) : (
-            recentDeposits.map((deposit) => (
-              <View key={deposit.id} style={styles.transactionItem}>
-                <View style={styles.transactionInfo}>
-                  <Text style={styles.transactionCustomer}>User: {deposit.user_name}</Text>
-                  <Text style={styles.transactionDate}>
-                    {new Date(deposit.created_at).toLocaleDateString()}
-                  </Text>
-                </View>
-                <View style={styles.transactionAmount}>
-                  <Text style={styles.amountText}>+${(deposit.amount / 100).toFixed(2)}</Text>
-                </View>
-              </View>
-            ))
-          )}
-        </View>
-
-        {/* Recent Redemptions */}
-        <View style={styles.transactionsContainer}>
-          <Text style={styles.sectionTitle}>Recent Redemptions</Text>
-          {recentTransactions.length === 0 ? (
-            <Text style={styles.emptyText}>No recent redemptions.</Text>
-          ) : (
-            recentTransactions.map((transaction) => (
-              <TouchableOpacity 
-                key={transaction.id}
-                style={styles.transactionItem}
-                onPress={() => {
-                  if (transaction.status === 'completed' && !transaction.rating) {
-                    navigation.navigate('TransactionRating', { 
-                      transactionId: transaction.id,
-                      transaction: transaction
-                    });
-                  } else {
-                    navigation.navigate('TransactionDetails', { transactionId: transaction.id });
-                  }
-                }}
-              >
-                <View style={styles.transactionInfo}>
-                  <Text style={styles.transactionCustomer}>{transaction.user_name}</Text>
-                  <Text style={styles.transactionDate}>
-                    {new Date(transaction.created_at).toLocaleDateString()}
-                  </Text>
-                </View>
-                <View style={styles.transactionAmount}>
-                  <Text style={styles.amountText}>-${(transaction.amount / 100).toFixed(2)}</Text>
-                  <View style={styles.transactionStatus}>
-                    <Text style={[
-                      styles.statusText,
-                      { color: transaction.status === 'completed' ? COLORS.success : COLORS.warning }
-                    ]}>
-                      {transaction.status}
+          {/* Recent Deposits */}
+          <View style={[styles.sectionBox, {marginTop: 12}]}>
+            <Text style={[styles.sectionTitle, { color: COLORS.primary, fontSize: 20, fontWeight: 'bold', marginBottom: 8 }]}>Recent Deposits</Text>
+            {recentDeposits.length === 0 ? (
+              <Text style={styles.emptyText}>No recent deposits.</Text>
+            ) : (
+              recentDeposits.map((deposit) => (
+                <View key={deposit.id} style={styles.transactionItem}>
+                  <View style={styles.transactionInfo}>
+                    <Text style={styles.transactionCustomer}>{deposit.user_name}</Text>
+                    <Text style={styles.transactionDate}>
+                      {new Date(deposit.created_at).toLocaleDateString()}
                     </Text>
-                    {transaction.status === 'completed' && !transaction.rating && (
-                      <Text style={styles.ratePrompt}>Tap to rate</Text>
-                    )}
-                    {transaction.rating && (
-                      <View style={styles.ratingContainer}>
-                        {[1, 2, 3, 4, 5].map((star) => (
-                          <FontAwesome
-                            key={star}
-                            name={star <= transaction.rating ? "star" : "star-o"}
-                            size={12}
-                            color={COLORS.primary}
-                            style={styles.ratingStar}
-                          />
-                        ))}
-                      </View>
-                    )}
+                  </View>
+                  <View style={styles.transactionAmount}>
+                    <Text style={styles.amountText}>+${(deposit.amount / 100).toFixed(2)}</Text>
                   </View>
                 </View>
-              </TouchableOpacity>
-            ))
-          )}
-        </View>
-      </ScrollView>
+              ))
+            )}
+          </View>
+
+          {/* Recent Redemptions */}
+          <View style={[styles.sectionBox, {marginTop: 12}]}>
+            <Text style={[styles.sectionTitle, { color: COLORS.primary, fontSize: 20, fontWeight: 'bold', marginBottom: 8 }]}>Recent Redemptions</Text>
+            {recentTransactions.length === 0 ? (
+              <Text style={styles.emptyText}>No recent redemptions.</Text>
+            ) : (
+              recentTransactions.map((transaction) => (
+                <View 
+                  key={transaction.id}
+                  style={styles.transactionItem}
+                >
+                  <View style={styles.transactionInfo}>
+                    <Text style={styles.transactionCustomer}>{transaction.user_name}</Text>
+                    <Text style={styles.transactionDate}>
+                      {new Date(transaction.created_at).toLocaleDateString()}
+                    </Text>
+                  </View>
+                  <View style={styles.transactionAmount}>
+                    <Text style={styles.amountText}>-${(transaction.amount / 100).toFixed(2)}</Text>
+                    <View style={styles.transactionStatus}>
+                      <Text style={[
+                        styles.statusText,
+                        transaction.status === 'redeemed'
+                          ? { color: COLORS.secondary }
+                          : transaction.status === 'completed' || transaction.status === 'complete'
+                          ? { color: COLORS.primary }
+                          : transaction.status === 'in_progress'
+                          ? { color: COLORS.text.white }
+                          : { color: COLORS.text.muted }
+                      ]}>
+                        {transaction.status.replace('_', ' ')}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 
   // Render customer view
   if (!isOwner) {
     return (
-      <View style={styles.container}>
-        {businessData?.locations?.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <FontAwesome name="map-marker" size={48} color={COLORS.text.muted} />
-            <Text style={styles.emptyText}>No locations available</Text>
-          </View>
-        ) : (
-          <CardStack
-            data={businessData.locations}
-            onCardPress={(location, action) => {
-              if (action === 'balances') {
-                navigation.navigate('Balances', { locationId: location.id });
-              } else if (action === 'all-transactions') {
-                navigation.navigate('GlobalTransactions', { locationId: location.id });
-              } else {
-                navigation.navigate('LocationMenu', { locationId: location.id });
-              }
-            }}
-          />
-        )}
-      </View>
+      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.surface.primary }}>
+        {/* Header with Profile and Inbox buttons */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, marginBottom: 8 }}>
+          <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={{ padding: 8 }}>
+            <FontAwesome name="user" size={28} color={COLORS.primary} />
+          </TouchableOpacity>
+          <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.text.white, flex: 1, textAlign: 'center' }}>Home</Text>
+          <TouchableOpacity onPress={() => navigation.navigate('Inbox')} style={{ padding: 8 }}>
+            <FontAwesome name="envelope" size={26} color={COLORS.primary} />
+          </TouchableOpacity>
+        </View>
+        <ScrollView style={styles.container}>
+          {businessData?.locations?.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <FontAwesome name="map-marker" size={48} color={COLORS.text.muted} />
+              <Text style={styles.emptyText}>No locations available</Text>
+            </View>
+          ) : (
+            <CardStack
+              data={businessData.locations}
+              onCardPress={(location, action) => {
+                if (action === 'balances') {
+                  navigation.navigate('Balance');
+                } else if (action === 'all-transactions') {
+                  navigation.navigate('GlobalTransactions');
+                } else {
+                  navigation.navigate('LocationMenu', { locationId: location.id });
+                }
+              }}
+            />
+          )}
+        </ScrollView>
+      </SafeAreaView>
     );
   }
 }
@@ -670,6 +689,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.surface.primary,
+  },
+  sectionBox: {
+    backgroundColor: COLORS.surface.card,
+    borderRadius: 16,
+    marginHorizontal: 12,
+    marginTop: 12,
+    padding: 16,
   },
   loadingContainer: {
     flex: 1,
@@ -711,7 +737,6 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     padding: 20,
-    backgroundColor: COLORS.surface.card,
   },
   logo: {
     width: 80,
@@ -734,19 +759,25 @@ const styles = StyleSheet.create({
     color: COLORS.text.white,
   },
   metricsContainer: {
+    // removed background and padding for new stat row style
+  },
+  statsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    padding: 16,
-    backgroundColor: COLORS.surface.card,
-    marginTop: 1,
+    marginHorizontal: 8,
+    marginTop: 12,
   },
-  metricCard: {
+  statBox: {
     flex: 1,
+    backgroundColor: COLORS.surface.card, // or a custom light gray
+    borderRadius: 16,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
     alignItems: 'center',
-    padding: 10,
+    marginHorizontal: 4,
   },
   metricValue: {
-    fontSize: 20,
+    fontSize: 30,
     fontWeight: 'bold',
     color: COLORS.primary,
     marginBottom: 4,
@@ -764,29 +795,23 @@ const styles = StyleSheet.create({
     color: COLORS.text.muted,
     fontSize: 14,
   },
-  quickActionsContainer: {
-    padding: 16,
-    backgroundColor: COLORS.surface.card,
-    marginTop: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text.white,
-    marginBottom: 16,
-  },
   quickActionsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
+    marginHorizontal: 12,
+    marginTop: 18,
   },
   quickAction: {
-    width: '48%',
+    flexBasis: '49%',
+    height: 130,
     backgroundColor: COLORS.surface.secondary,
-    padding: 16,
-    borderRadius: 8,
+    borderRadius: 16,
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    justifyContent: 'center',
   },
   quickActionText: {
     color: COLORS.text.white,
@@ -835,18 +860,6 @@ const styles = StyleSheet.create({
   },
   transactionStatus: {
     alignItems: 'flex-end',
-  },
-  ratePrompt: {
-    fontSize: 12,
-    color: COLORS.primary,
-    marginTop: 4,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    marginTop: 4,
-  },
-  ratingStar: {
-    marginLeft: 2,
   },
   // Customer View Styles
   locationsContainer: {
@@ -914,5 +927,33 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     color: COLORS.text.white,
+  },
+  logoLarge: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 16,
+  },
+  logoPlaceholderLarge: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: COLORS.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  businessNameLarge: {
+    fontSize: 30,
+    fontWeight: 'bold',
+    color: COLORS.text.white,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  sectionTitle: {
+    color: COLORS.text.white,
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
   },
 }); 

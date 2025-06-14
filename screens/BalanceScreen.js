@@ -305,15 +305,12 @@ const styles = StyleSheet.create({
     width: '48%',
     backgroundColor: COLORS.surface.card,
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     padding: 16,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    marginBottom: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   locationHeader: {
     marginBottom: 12,
@@ -334,8 +331,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: COLORS.primary,
     padding: 8,
-    borderRadius: 8,
+    borderRadius: 12,
     justifyContent: 'center',
+    marginBottom: 8,
   },
   addButtonText: {
     color: COLORS.text.white,
@@ -398,9 +396,10 @@ const styles = StyleSheet.create({
   modalButton: {
     flex: 1,
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     alignItems: 'center',
     marginHorizontal: 8,
+    marginBottom: 8,
   },
   cancelButton: {
     backgroundColor: COLORS.surface.secondary,

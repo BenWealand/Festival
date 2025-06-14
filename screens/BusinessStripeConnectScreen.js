@@ -85,6 +85,7 @@ export default function BusinessStripeConnectScreen({ route, navigation }) {
       }
 
       try {
+        if (typeof url !== 'string') return; // GUARD: Only proceed if url is a string
         // Parse the URL to get the query parameters
         const urlObj = new URL(url);
         console.log('Parsed URL:', {

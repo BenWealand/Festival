@@ -23,11 +23,12 @@ export default function CustomerDetailsScreen({ route, navigation }) {
   const getStatusColor = (status) => {
     switch (status) {
       case 'completed':
-        return COLORS.success;
-      case 'pending':
-        return COLORS.warning;
-      case 'failed':
-        return COLORS.error;
+      case 'complete':
+        return COLORS.primary;
+      case 'in_progress':
+        return COLORS.text.white;
+      case 'redeemed':
+        return COLORS.secondary;
       default:
         return COLORS.text.muted;
     }
@@ -65,7 +66,7 @@ export default function CustomerDetailsScreen({ route, navigation }) {
                 styles.transactionStatus,
                 { color: getStatusColor(transaction.status) }
               ]}>
-                {transaction.status}
+                {transaction.status.replace('_', ' ').toUpperCase()}
               </Text>
             </View>
             <Text style={styles.transactionAmount}>

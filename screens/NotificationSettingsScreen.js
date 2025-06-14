@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, Switch, TouchableOpacity } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { COLORS } from '../constants/theme';
+import { useNavigation } from '@react-navigation/native';
 
 export default function NotificationSettingsScreen() {
+  const navigation = useNavigation();
   const [notifications, setNotifications] = useState(true);
   const [pushNotifications, setPushNotifications] = useState(true);
   const [smsNotifications, setSmsNotifications] = useState(true);
@@ -18,6 +20,13 @@ export default function NotificationSettingsScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Custom Header */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface.secondary, paddingTop: 36, paddingBottom: 12, paddingHorizontal: 16 }}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 16 }}>
+          <FontAwesome name="arrow-left" size={26} color={COLORS.primary} />
+        </TouchableOpacity>
+        <Text style={{ color: COLORS.text.white, fontSize: 22, fontWeight: 'bold', flex: 1 }}>Notification Settings</Text>
+      </View>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Notification Settings</Text>
         

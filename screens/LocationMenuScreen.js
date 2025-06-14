@@ -4,18 +4,27 @@ import { supabase } from '../lib/supabase';
 import { COLORS } from '../constants/theme';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { FontAwesome } from '@expo/vector-icons';
+import CartScreen from './CartScreen';
+import { useAuth } from '../context/AuthContext';
 
 export default function LocationMenuScreen() {
   const route = useRoute();
   const navigation = useNavigation();
-  const { locationId } = route.params;
+  const locationId = route?.params?.locationId;
   const [location, setLocation] = useState(null);
   const [menuItems, setMenuItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [cart, setCart] = useState([]);
+  const [showCart, setShowCart] = useState(false);
+  const { user } = useAuth();
 
   useEffect(() => {
-    fetchLocationAndMenu();
+    if (locationId) {
+      fetchLocationAndMenu();
+    } else {
+      setLoading(false);
+    }
   }, [locationId]);
 
   const fetchLocationAndMenu = async () => {
@@ -49,6 +58,14 @@ export default function LocationMenuScreen() {
     }
   };
 
+  if (!locationId) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>No location selected. Please select a location from the appropriate screen.</Text>
+      </View>
+    );
+  }
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -75,47 +92,104 @@ export default function LocationMenuScreen() {
     return acc;
   }, {});
 
+  // Add item to cart
+  const addToCart = (item) => {
+    setCart((prev) => {
+      // If item already in cart, increment quantity
+      const idx = prev.findIndex((i) => i.id === item.id);
+      if (idx !== -1) {
+        const updated = [...prev];
+        updated[idx].quantity = (updated[idx].quantity || 1) + 1;
+        return updated;
+      }
+      return [...prev, { ...item, quantity: 1 }];
+    });
+  };
+
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        {location?.logo_url ? (
-          <Image 
-            source={{ uri: location.logo_url }} 
-            style={styles.logo}
-            resizeMode="cover"
-          />
-        ) : null}
-        <Text style={styles.locationName}>{location?.name}</Text>
-      </View>
-
-      {/* Add button to view transactions */}
-      <TouchableOpacity 
-        style={styles.viewTransactionsButton}
-        onPress={() => navigation.navigate('LocationTransactions', { locationId: locationId })}
-      >
-        <FontAwesome name="history" size={20} color={COLORS.text.white} />
-        <Text style={styles.viewTransactionsButtonText}>View Recent Transactions</Text>
-      </TouchableOpacity>
-
-      {Object.entries(menuByCategory).map(([category, items]) => (
-        <View key={category} style={styles.categorySection}>
-          <Text style={styles.categoryTitle}>{category}</Text>
-          {items.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={styles.menuItem}
-              onPress={() => navigation.navigate('MenuItemDetail', { item, locationId })}
-            >
-              <View style={styles.menuItemInfo}>
-                <Text style={styles.itemName}>{item.name}</Text>
-                <Text style={styles.itemDescription}>{item.description}</Text>
-              </View>
-              <Text style={styles.itemPrice}>${(item.price / 100).toFixed(2)}</Text>
-            </TouchableOpacity>
-          ))}
+    <View style={{ flex: 1 }}>
+      <ScrollView style={styles.container}>
+        <View style={styles.header}>
+          {location?.logo_url ? (
+            <Image 
+              source={{ uri: location.logo_url }} 
+              style={styles.logo}
+              resizeMode="cover"
+            />
+          ) : null}
+          <Text style={styles.locationName}>{location?.name}</Text>
         </View>
-      ))}
-    </ScrollView>
+
+        {/* Add button to view transactions */}
+        <TouchableOpacity 
+          style={styles.viewTransactionsButton}
+          onPress={() => {
+            console.log('Navigating to LocationTransactions', { locationId, userId: user?.id });
+            navigation.navigate('LocationTransactions', { locationId: locationId, userId: user?.id });
+          }}
+        >
+          <FontAwesome name="history" size={20} color={COLORS.text.white} />
+          <Text style={styles.viewTransactionsButtonText}>View Recent Transactions</Text>
+        </TouchableOpacity>
+
+        {Object.entries(menuByCategory).map(([category, items]) => (
+          <View key={category} style={styles.categorySection}>
+            <Text style={styles.categoryTitle}>{category}</Text>
+            {items.map((item) => (
+              <View key={item.id} style={[styles.menuItem, { flexDirection: 'row', alignItems: 'center' }]}> 
+                <TouchableOpacity
+                  style={{ flex: 1 }}
+                  onPress={() => navigation.navigate('MenuItemDetail', { item, locationId, addToCart })}
+                >
+                  <View style={styles.menuItemInfo}>
+                    <Text style={styles.itemName}>{item.name}</Text>
+                    <Text style={styles.itemDescription}>{item.description}</Text>
+                  </View>
+                  <Text style={styles.itemPrice}>${(item.price / 100).toFixed(2)}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ marginLeft: 10, backgroundColor: COLORS.primary, padding: 8, borderRadius: 6 }}
+                  onPress={() => addToCart(item)}
+                >
+                  <FontAwesome name="plus" size={16} color={COLORS.text.white} />
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
+        ))}
+      </ScrollView>
+      {/* View Cart Button */}
+      {cart.length > 0 && (
+        <TouchableOpacity
+          style={{
+            position: 'absolute',
+            bottom: 20,
+            left: 20,
+            right: 20,
+            backgroundColor: COLORS.primary,
+            padding: 16,
+            borderRadius: 12,
+            alignItems: 'center',
+            zIndex: 10,
+          }}
+          onPress={() => setShowCart(true)}
+        >
+          <Text style={{ color: COLORS.text.white, fontWeight: 'bold', fontSize: 18 }}>
+            View Cart / Purchase Order ({cart.reduce((sum, i) => sum + (i.quantity || 1), 0)} items)
+          </Text>
+        </TouchableOpacity>
+      )}
+      {/* Cart Modal/Screen */}
+      {showCart && (
+        <CartScreen
+          visible={showCart}
+          onClose={() => setShowCart(false)}
+          cart={cart}
+          setCart={setCart}
+          locationId={locationId}
+        />
+      )}
+    </View>
   );
 }
 

@@ -1,39 +1,17 @@
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, Platform, Linking } from 'react-native';
-import { NavigationContainer, useNavigation } from '@react-navigation/native';
-import { createDrawerNavigator } from '@react-navigation/drawer';
+import { NavigationContainer } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
 import { FontAwesome } from '@expo/vector-icons';
 import { supabase } from './lib/supabase';
 import { COLORS } from './constants/theme';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import CustomDrawer from './components/CustomDrawer';
-import Auth from './components/Auth';
 import { StripeProvider } from '@stripe/stripe-react-native';
 import Constants from 'expo-constants';
-
-import Animated from 'react-native-reanimated';
-
-// Ignore specific navigation warnings
-if (__DEV__) {
-  const ignoreWarns = [
-    "The action 'RESET'",
-    "was not handled by any navigator",
-  ];
-
-  const error = console.error;
-  console.error = (...arg) => {
-    for (const warning of ignoreWarns) {
-      if (typeof arg[0] === 'string' && arg[0].startsWith('ERROR') && arg[0].includes(warning)) {
-        return;
-      }
-    }
-    error(...arg);
-  };
-}
-
-console.log("👀 Reanimated:", Animated);
+import Auth from './components/Auth';
+import { StatusBar } from 'expo-status-bar';
 
 // Import screens
 import HomeScreen from './screens/HomeScreen';
@@ -55,433 +33,103 @@ import CustomerDetailsScreen from './screens/CustomerDetailsScreen';
 import MenuItemDetailScreen from './screens/MenuItemDetailScreen';
 import LocationTransactionsScreen from './screens/LocationTransactionsScreen';
 import GlobalTransactionsScreen from './screens/GlobalTransactionsScreen';
+import ActiveOrdersScreen from './screens/ActiveOrdersScreen';
+import ScrollableTabBar from './components/ScrollableTabBar';
 
-// App State for session refresh
-import { AppState } from 'react-native';
-AppState.addEventListener('change', (state) => {
-  if (state === 'active') {
-    supabase.auth.startAutoRefresh();
-  } else {
-    supabase.auth.stopAutoRefresh();
-  }
-});
-
-const Drawer = createDrawerNavigator();
+const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
-// Helper function to get the appropriate icon for each screen
-const getScreenIcon = (routeName) => {
-  switch (routeName) {
-    case 'Home':
-      return 'home';
-    case 'Profile':
-      return 'user';
-    case 'Settings':
-      return 'cog';
-    case 'Balance':
-      return 'money';
-    case 'Inbox':
-      return 'envelope';
-    case 'NotificationSettings':
-      return 'bell';
-    default:
-      return 'circle';
-  }
-};
+const BUSINESS_TABS = [
+  { name: 'Home', component: HomeScreen, icon: 'home', label: 'Home' },
+  { name: 'BusinessMenu', component: BusinessMenuScreen, icon: 'cutlery', label: 'Menu' },
+  { name: 'Customers', component: CustomersScreen, icon: 'users', label: 'Customers' },
+  { name: 'ActiveOrders', component: ActiveOrdersScreen, icon: 'shopping-basket', label: 'Active Orders' },
+  { name: 'Analytics', component: AnalyticsScreen, icon: 'bar-chart', label: 'Analytics' },
+  { name: 'Settings', component: SettingsScreen, icon: 'cog', label: 'Settings' },
+];
 
-// Auth Stack
-function AuthStack() {
+const USER_TABS = [
+  { name: 'Home', component: HomeScreen, icon: 'home', label: 'Home' },
+  { name: 'Balance', component: BalanceScreen, icon: 'money', label: 'Balance' },
+  { name: 'GlobalTransactions', component: GlobalTransactionsScreen, icon: 'exchange', label: 'Transactions' },
+  { name: 'Settings', component: SettingsScreen, icon: 'cog', label: 'Settings' },
+];
+
+function MainTabs({ isOwner }) {
+  const tabs = isOwner ? BUSINESS_TABS : USER_TABS;
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Auth" component={Auth} />
-    </Stack.Navigator>
-  );
-}
-
-// Main App Stack
-function MainStack() {
-  return Platform.OS === 'web' ? <WebNavigator /> : <MobileNavigator />;
-}
-
-// Web Navigation
-function WebNavigator() {
-  return (
-    <Stack.Navigator
-      screenOptions={({ route, navigation }) => ({
-        headerStyle: {
-          backgroundColor: COLORS.surface.primary,
+    <Tab.Navigator
+      tabBar={props => <ScrollableTabBar {...props} />}
+      screenOptions={({ route }) => ({
+        headerShown: false,
+        tabBarIcon: ({ color, size }) => {
+          const tab = tabs.find(t => t.name === route.name);
+          return tab ? (
+            <FontAwesome name={tab.icon} size={size} color={color} />
+          ) : null;
         },
-        headerTintColor: COLORS.text.white,
-        headerTitleStyle: {
-          fontWeight: 'bold',
+        tabBarActiveTintColor: COLORS.primary,
+        tabBarInactiveTintColor: COLORS.text.white,
+        tabBarStyle: {
+          backgroundColor: COLORS.surface.card,
+          borderTopWidth: 0,
+          height: 70,
         },
-        headerLeft: () => (
-          <View style={styles.headerLeftContainer}>
-            <TouchableOpacity 
-              onPress={() => navigation.goBack()}
-              style={styles.headerIconContainer}
-            >
-              <FontAwesome 
-                name={getScreenIcon(route.name)} 
-                size={24} 
-                color={COLORS.text.white} 
-              />
-            </TouchableOpacity>
-          </View>
-        ),
+        tabBarShowLabel: false,
       })}
     >
-      <Stack.Screen name="Home" component={HomeScreen} />
-      <Stack.Screen name="Profile" component={ProfileScreen} />
-      <Stack.Screen name="Settings" component={SettingsScreen} />
-      <Stack.Screen name="Balance" component={BalanceScreen} />
-      <Stack.Screen name="Inbox" component={InboxScreen} />
-      <Stack.Screen 
-        name="NotificationSettings" 
-        component={NotificationSettingsScreen}
-        options={{
-          title: 'Notification Settings',
-        }}
-      />
-      <Stack.Screen 
-        name="StripeOnboarding" 
-        component={StripeOnboardingScreen}
-        options={{
-          title: 'Stripe Onboarding',
-        }}
-      />
-      <Stack.Screen 
-        name="BusinessStripeConnect" 
-        component={BusinessStripeConnectScreen}
-        options={{
-          title: 'Connect with Stripe',
-        }}
-      />
-      <Stack.Screen name="SuccessScreen" component={SuccessScreen} />
-      <Stack.Screen name="FailureScreen" component={FailureScreen} />
-    </Stack.Navigator>
-  );
-}
-
-// Mobile Navigation
-function MobileNavigator() {
-  const [isOwner, setIsOwner] = useState(false);
-  const [ownedLocationId, setOwnedLocationId] = useState(null);
-  const { user } = useAuth();
-
-  useEffect(() => {
-    const checkOwnership = async () => {
-      if (user) {
-        const { data: locations, error } = await supabase
-          .from('locations')
-          .select('id')
-          .eq('owner_id', user.id)
-          .single();
-
-        if (locations) {
-          setIsOwner(true);
-          setOwnedLocationId(locations.id);
-        }
-      }
-    };
-
-    checkOwnership();
-  }, [user]);
-
-  return (
-    <Stack.Navigator
-      screenOptions={({ route, navigation }) => ({
-        headerStyle: {
-          backgroundColor: COLORS.surface.primary,
-        },
-        headerTintColor: COLORS.text.white,
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
-      })}
-    >
-      <Stack.Screen 
-        name="DrawerHome" 
-        component={DrawerNavigator}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen 
-        name="CustomerDetails" 
-        component={CustomerDetailsScreen}
-        options={{
-          title: 'Customer Details',
-          headerShown: true,
-        }}
-      />
-      <Stack.Screen 
-        name="TransactionRating" 
-        component={TransactionRatingScreen}
-        options={{
-          title: 'Rate Transaction',
-          headerShown: true,
-        }}
-      />
-      <Stack.Screen 
-        name="NotificationSettings" 
-        component={NotificationSettingsScreen}
-        options={{
-          title: 'Notification Settings',
-          headerShown: true,
-        }}
-      />
-      <Stack.Screen 
-        name="MenuItemDetail" 
-        component={MenuItemDetailScreen}
-        options={{
-          title: 'Item Details',
-          headerShown: true,
-        }}
-      />
-      <Stack.Screen 
-        name="LocationTransactions" 
-        component={LocationTransactionsScreen}
-        options={{
-          title: 'Location Transactions',
-          headerShown: true,
-        }}
-      />
-    </Stack.Navigator>
-  );
-}
-
-function DrawerNavigator() {
-  const [isOwner, setIsOwner] = useState(false);
-  const [ownedLocationId, setOwnedLocationId] = useState(null);
-  const { user } = useAuth();
-
-  useEffect(() => {
-    const checkOwnership = async () => {
-      if (user) {
-        const { data: locations, error } = await supabase
-          .from('locations')
-          .select('id')
-          .eq('owner_id', user.id)
-          .single();
-
-        if (locations) {
-          setIsOwner(true);
-          setOwnedLocationId(locations.id);
-        }
-      }
-    };
-
-    checkOwnership();
-  }, [user]);
-
-  return (
-    <Drawer.Navigator
-      drawerContent={(props) => <CustomDrawer {...props} />}
-      screenOptions={({ route, navigation }) => ({
-        headerStyle: {
-          backgroundColor: COLORS.surface.primary,
-        },
-        headerTintColor: COLORS.text.white,
-        headerTitleStyle: {
-          fontWeight: 'bold',
-        },
-        headerLeft: () => (
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 15 }}>
-            <TouchableOpacity onPress={() => navigation.toggleDrawer()}>
-              <FontAwesome name="bars" size={24} color={COLORS.text.white} />
-            </TouchableOpacity>
-            <FontAwesome 
-              name={getScreenIcon(route.name)} 
-              size={24} 
-              color={COLORS.text.white} 
-              style={{ marginLeft: 15 }}
-            />
-          </View>
-        ),
-        drawerStyle: {
-          backgroundColor: COLORS.surface.primary,
-          width: 240,
-        },
-        drawerActiveTintColor: COLORS.text.white,
-        drawerInactiveTintColor: COLORS.text.muted,
-      })}
-    >
-      <Drawer.Screen 
-        name="Home" 
-        component={HomeScreen}
-        options={{
-          drawerIcon: ({ color }) => (
-            <FontAwesome name="home" size={24} color={color} />
-          ),
-        }}
-      />
-      <Drawer.Screen 
-        name="LocationMenu" 
-        component={LocationMenuScreen}
-        options={{
-          title: 'Menu',
-          drawerItemStyle: { display: 'none' },
-        }}
-      />
-      <Drawer.Screen 
-        name="Profile" 
-        component={ProfileScreen}
-        options={{
-          drawerIcon: ({ color }) => (
-            <FontAwesome name="user" size={24} color={color} />
-          ),
-        }}
-      />
-      <Drawer.Screen 
-        name="Settings" 
-        component={SettingsScreen}
-        options={{
-          drawerIcon: ({ color }) => (
-            <FontAwesome name="cog" size={24} color={color} />
-          ),
-        }}
-      />
-      {!isOwner && (
-        <Drawer.Screen 
-          name="Balance" 
-          component={BalanceScreen}
-          options={{
-            title: 'Balance',
-            drawerIcon: ({ color }) => (
-              <FontAwesome name="money" size={24} color={color} />
-            ),
-          }}
-        />
-      )}
-      <Drawer.Screen 
-        name="Inbox" 
-        component={InboxScreen}
-        options={{
-          title: 'Inbox',
-          drawerIcon: ({ color }) => (
-            <FontAwesome name="envelope" size={24} color={color} />
-          ),
-        }}
-      />
-      {isOwner && ownedLocationId && (
-        <Drawer.Screen 
-          name="BusinessStripeConnectScreen" 
-          component={BusinessStripeConnectScreen}
-          initialParams={{ locationId: ownedLocationId }}
-          options={{
-            title: 'Connect with Stripe',
-            drawerIcon: ({ color }) => (
-              <FontAwesome name="credit-card" size={24} color={color} />
-            ),
-          }}
-        />
-      )}
-      {isOwner && (
-        <Drawer.Screen 
-          name="BusinessMenu" 
-          component={BusinessMenuScreen}
-          options={{
-            title: 'Manage Menu',
-            drawerIcon: ({ color }) => (
-              <FontAwesome name="cutlery" size={24} color={color} />
-            ),
-          }}
-        />
-      )}
-      {isOwner && (
-        <Drawer.Screen 
-          name="Analytics" 
-          component={AnalyticsScreen}
-          options={{
-            title: 'Analytics',
-            drawerIcon: ({ color }) => (
-              <FontAwesome name="bar-chart" size={24} color={color} />
-            ),
-          }}
-        />
-      )}
-      {isOwner && (
-        <Drawer.Screen 
-          name="Customers" 
-          component={CustomersScreen}
-          options={{
-            title: 'Customers',
-            drawerIcon: ({ color }) => (
-              <FontAwesome name="users" size={24} color={color} />
-            ),
-          }}
-        />
-      )}
-      {!isOwner && (
-        <Drawer.Screen 
-          name="GlobalTransactions" 
-          component={GlobalTransactionsScreen}
-          options={{
-            title: 'All Transactions',
-            drawerIcon: ({ color }) => (
-              <FontAwesome name="history" size={24} color={color} />
-            ),
-          }}
-        />
-      )}
-    </Drawer.Navigator>
-  );
-}
-
-// Root Stack Navigator to always provide SuccessScreen and FailureScreen
-function RootStack() {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="Main" component={MainStack} />
-      <Stack.Screen name="SuccessScreen" component={SuccessScreen} />
-      <Stack.Screen name="FailureScreen" component={FailureScreen} />
-    </Stack.Navigator>
+      {tabs.map(tab => (
+        <Tab.Screen 
+          key={tab.name} 
+          name={tab.name}
+        >
+          {() => (
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
+              <Stack.Screen name={`${tab.name}Main`} component={tab.component} />
+              {tab.name === 'Home' && (
+                <>
+                  <Stack.Screen name="LocationMenu" component={LocationMenuScreen} />
+                  <Stack.Screen name="LocationTransactions" component={LocationTransactionsScreen} />
+                  <Stack.Screen name="MenuItemDetail" component={MenuItemDetailScreen} />
+                </>
+              )}
+            </Stack.Navigator>
+          )}
+        </Tab.Screen>
+      ))}
+    </Tab.Navigator>
   );
 }
 
 export default function App() {
-  const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const navigationRef = React.useRef();
+  const { user, loading: authLoading } = useAuth();
+  const [isOwner, setIsOwner] = React.useState(null); // null = loading, true/false = loaded
+  const [ownerLoading, setOwnerLoading] = React.useState(true);
 
-  useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      // Reset navigation when auth state changes
-      if (!session && navigationRef.current) {
-        navigationRef.current.reset({
-          index: 0,
-          routes: [{ name: 'Auth' }],
-        });
+  React.useEffect(() => {
+    const checkOwner = async () => {
+      if (!user?.id) {
+        setIsOwner(false);
+        setOwnerLoading(false);
+        return;
       }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const handleDeepLink = (event) => {
-      const url = event.url;
-      if (url.includes('stripe-connect-success')) {
-        navigationRef.current?.navigate('SuccessScreen');
-      } else if (url.includes('stripe-connect-failure')) {
-        navigationRef.current?.navigate('FailureScreen');
+      try {
+        const { data: ownedLocation, error: ownerError } = await supabase
+          .from('locations')
+          .select('id')
+          .eq('owner_id', user.id)
+          .single();
+        setIsOwner(!!ownedLocation);
+      } catch (e) {
+        setIsOwner(false);
+      } finally {
+        setOwnerLoading(false);
       }
     };
+    checkOwner();
+  }, [user]);
 
-    const subscription = Linking.addEventListener('url', handleDeepLink);
-    return () => {
-      subscription.remove();
-    };
-  }, []);
-
-  if (loading) {
+  if (authLoading || ownerLoading || isOwner === null) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -489,59 +137,53 @@ export default function App() {
     );
   }
 
+  if (!user) {
+    return <Auth />;
+  }
+
+  // DEBUG: Log TAB_SCREENS and check for misconfigurations
+  console.log('TAB_SCREENS:', BUSINESS_TABS.concat(USER_TABS));
+  BUSINESS_TABS.concat(USER_TABS).forEach(tab => {
+    if (!tab.name || !tab.component) {
+      console.error('Tab misconfiguration:', tab);
+    }
+  });
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <AuthProvider>
-        <StripeProvider
-          publishableKey={Constants.expoConfig.extra.stripePubKey}
-          merchantIdentifier="merchant.com.benwealand.myapp"
-          urlScheme="myapp"
-        >
-          <NavigationContainer ref={navigationRef}>
-            {session ? <RootStack /> : <AuthStack />}
-          </NavigationContainer>
-        </StripeProvider>
-      </AuthProvider>
+      <StatusBar style="light" backgroundColor={COLORS.surface.primary} translucent={false} />
+      <StripeProvider
+        publishableKey={Constants.expoConfig.extra.stripePubKey}
+        merchantIdentifier="merchant.com.benwealand.myapp"
+        urlScheme="myapp"
+      >
+        <NavigationContainer>
+          {!user ? (
+            <Auth />
+          ) : (
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="MainTabs">
+                {() => <MainTabs isOwner={isOwner} />}
+              </Stack.Screen>
+              <Stack.Screen name="LocationMenu" component={LocationMenuScreen} />
+              <Stack.Screen name="LocationTransactions" component={LocationTransactionsScreen} />
+              <Stack.Screen name="MenuItemDetail" component={MenuItemDetailScreen} />
+              <Stack.Screen name="Profile" component={ProfileScreen} />
+              <Stack.Screen name="Inbox" component={InboxScreen} />
+              <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
+            </Stack.Navigator>
+          )}
+        </NavigationContainer>
+      </StripeProvider>
     </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: COLORS.surface.primary,
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 16,
-    color: COLORS.text.white,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: COLORS.surface.primary,
-  },
-  errorText: {
-    color: COLORS.text.white,
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  headerLeftContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 15,
-  },
-  headerIconContainer: {
-    padding: 8,
-  },
-  headerScreenIcon: {
-    marginLeft: 8,
   },
 });

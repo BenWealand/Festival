@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
-import { useRoute } from '@react-navigation/native';
+import { useRoute, useNavigation } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { COLORS } from '../constants/theme';
+import { FontAwesome } from '@expo/vector-icons';
 
 export default function LocationTransactionsScreen() {
   const route = useRoute();
+  const navigation = useNavigation();
   const { locationId } = route.params;
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -71,46 +73,72 @@ export default function LocationTransactionsScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>Recent Transactions</Text>
-      {transactions.length === 0 ? (
-        <Text style={styles.emptyText}>No transactions found for this location.</Text>
-      ) : (
-        transactions.map((transaction) => (
-          <View key={transaction.id} style={styles.transactionItem}>
-            <View style={styles.transactionHeader}>
-              <Text style={styles.transactionDate}>{formatDate(transaction.created_at)}</Text>
-            </View>
-            
-            <View style={styles.transactionDetails}>
-              {transaction.items && transaction.items.length > 0 ? (
-                transaction.items.map((item, index) => (
-                  <View key={index} style={styles.itemRow}>
-                    <Text style={styles.itemText}>
-                      {item.quantity}x {item.name}
-                    </Text>
-                    <Text style={styles.itemPrice}>
-                      ${((item.price * item.quantity) / 100).toFixed(2)}
-                    </Text>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.noItemsText}>No items in this transaction</Text>
-              )}
-            </View>
+    <View style={{ flex: 1 }}>
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <FontAwesome name="arrow-left" size={24} color={COLORS.text.white} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Recent Transactions</Text>
+      </View>
+      <ScrollView style={styles.container}>
+        {transactions.length === 0 ? (
+          <Text style={styles.emptyText}>No transactions found for this location.</Text>
+        ) : (
+          transactions.map((transaction) => (
+            <View key={transaction.id} style={styles.transactionItem}>
+              <View style={styles.transactionHeader}>
+                <Text style={styles.transactionDate}>{formatDate(transaction.created_at)}</Text>
+              </View>
+              
+              <View style={styles.transactionDetails}>
+                {transaction.items && transaction.items.length > 0 ? (
+                  transaction.items.map((item, index) => (
+                    <View key={index} style={styles.itemRow}>
+                      <Text style={styles.itemText}>
+                        {item.quantity}x {item.name}
+                      </Text>
+                      <Text style={styles.itemPrice}>
+                        ${((item.price * item.quantity) / 100).toFixed(2)}
+                      </Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.noItemsText}>No items in this transaction</Text>
+                )}
+              </View>
 
-            <View style={styles.transactionFooter}>
-              <Text style={styles.statusText}>Status: {transaction.status}</Text>
-              <Text style={styles.totalAmount}>Total: ${(transaction.amount / 100).toFixed(2)}</Text>
+              <View style={styles.transactionFooter}>
+                <Text style={styles.statusText}>Status: {transaction.status}</Text>
+                <Text style={styles.totalAmount}>Total: ${(transaction.amount / 100).toFixed(2)}</Text>
+              </View>
             </View>
-          </View>
-        ))
-      )}
-    </ScrollView>
+          ))
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: COLORS.surface.secondary,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  backButton: {
+    marginRight: 16,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.text.white,
+  },
   container: {
     flex: 1,
     backgroundColor: COLORS.surface.primary,

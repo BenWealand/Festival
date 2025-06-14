@@ -14,6 +14,8 @@ import { supabase } from '../lib/supabase';
 import { COLORS } from '../constants/theme';
 import { FontAwesome } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { useFocusEffect } from '@react-navigation/native';
+import { YOUR_BACKEND_API_URL } from '@env';
 
 export default function BusinessMenuScreen() {
   const { user } = useAuth();
@@ -371,8 +373,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: COLORS.surface.card,
     padding: 16,
-    borderRadius: 8,
-    marginBottom: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: 12,
+    alignItems: 'center',
   },
   menuItemInfo: {
     flex: 1,
@@ -411,7 +416,7 @@ const styles = StyleSheet.create({
     bottom: 20,
     width: 56,
     height: 56,
-    borderRadius: 28,
+    borderRadius: 12,
     backgroundColor: COLORS.primary,
     justifyContent: 'center',
     alignItems: 'center',
@@ -423,6 +428,7 @@ const styles = StyleSheet.create({
     },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
+    marginBottom: 8,
   },
   modalContainer: {
     flex: 1,
@@ -459,9 +465,10 @@ const styles = StyleSheet.create({
   modalButton: {
     flex: 1,
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 12,
     marginHorizontal: 8,
     alignItems: 'center',
+    marginBottom: 8,
   },
   cancelButton: {
     backgroundColor: COLORS.surface.primary,

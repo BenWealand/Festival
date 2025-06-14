@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityInd
 import { supabase } from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS } from '../constants/theme';
+import { FontAwesome } from '@expo/vector-icons';
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
@@ -208,11 +209,7 @@ export default function ProfileScreen() {
                 throw error;
               }
               console.log('Logout successful');
-              // Navigate to the login screen after successful logout
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Login' }],
-              });
+              // No navigation needed; App will show Auth screen automatically
             } catch (error) {
               console.error('Logout error:', error);
               Alert.alert('Error', error.message);
@@ -232,107 +229,116 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.section}>
-        <Text style={styles.label}>Username</Text>
-        <TextInput
-          style={[styles.input, fieldErrors.username && styles.inputError]}
-          placeholder="Username"
-          placeholderTextColor="rgba(255, 255, 255, 0.5)"
-          value={username}
-          onChangeText={setUsername}
-          autoCapitalize="none"
-        />
-        {fieldErrors.username && <Text style={styles.errorText}>{fieldErrors.username}</Text>}
-
-        <Text style={styles.label}>First Name</Text>
-        <TextInput
-          style={[styles.input, fieldErrors.firstName && styles.inputError]}
-          placeholder="First Name"
-          placeholderTextColor="rgba(255, 255, 255, 0.5)"
-          value={firstName}
-          onChangeText={setFirstName}
-          autoCapitalize="words"
-        />
-        {fieldErrors.firstName && <Text style={styles.errorText}>{fieldErrors.firstName}</Text>}
-
-        <Text style={styles.label}>Middle Name</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Middle Name"
-          placeholderTextColor="rgba(255, 255, 255, 0.5)"
-          value={middleName}
-          onChangeText={setMiddleName}
-          autoCapitalize="words"
-        />
-
-        <Text style={styles.label}>Last Name</Text>
-        <TextInput
-          style={[styles.input, fieldErrors.lastName && styles.inputError]}
-          placeholder="Last Name"
-          placeholderTextColor="rgba(255, 255, 255, 0.5)"
-          value={lastName}
-          onChangeText={setLastName}
-          autoCapitalize="words"
-        />
-        {fieldErrors.lastName && <Text style={styles.errorText}>{fieldErrors.lastName}</Text>}
-
-        <Text style={styles.label}>Suffix</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Suffix (Jr., Sr., III, etc.)"
-          placeholderTextColor="rgba(255, 255, 255, 0.5)"
-          value={suffix}
-          onChangeText={setSuffix}
-          autoCapitalize="words"
-        />
-
-        <Text style={styles.label}>Phone Number</Text>
-        <View style={styles.phoneContainer}>
-          <TextInput
-            style={[styles.input, styles.countryCode]}
-            placeholder="+1"
-            placeholderTextColor="rgba(255, 255, 255, 0.5)"
-            value={countryCode}
-            onChangeText={(text) => {
-              // Ensure country code starts with +
-              const formattedText = text.startsWith('+') ? text : `+${text}`;
-              setCountryCode(formattedText);
-            }}
-            keyboardType="phone-pad"
-            autoCapitalize="none"
-          />
-          <TextInput
-            style={[styles.input, styles.phoneNumber, fieldErrors.phoneNumber && styles.inputError]}
-            placeholder="Phone Number"
-            placeholderTextColor="rgba(255, 255, 255, 0.5)"
-            value={phoneNumber}
-            onChangeText={setPhoneNumber}
-            keyboardType="phone-pad"
-            autoCapitalize="none"
-          />
-        </View>
-        {fieldErrors.phoneNumber && <Text style={styles.errorText}>{fieldErrors.phoneNumber}</Text>}
+    <View style={{ flex: 1, backgroundColor: COLORS.surface.primary }}>
+      {/* Custom Header */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface.secondary, paddingTop: 36, paddingBottom: 12, paddingHorizontal: 16 }}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 16 }}>
+          <FontAwesome name="arrow-left" size={26} color={COLORS.primary} />
+        </TouchableOpacity>
+        <Text style={{ color: COLORS.text.white, fontSize: 22, fontWeight: 'bold', flex: 1 }}>Profile</Text>
       </View>
+      <View style={styles.container}>
+        <View style={styles.section}>
+          <Text style={styles.label}>Username</Text>
+          <TextInput
+            style={[styles.input, fieldErrors.username && styles.inputError]}
+            placeholder="Username"
+            placeholderTextColor="rgba(255, 255, 255, 0.5)"
+            value={username}
+            onChangeText={setUsername}
+            autoCapitalize="none"
+          />
+          {fieldErrors.username && <Text style={styles.errorText}>{fieldErrors.username}</Text>}
 
-      <TouchableOpacity 
-        style={[styles.button, saving && styles.buttonDisabled]}
-        onPress={updateProfile}
-        disabled={saving}
-      >
-        {saving ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Save Changes</Text>
-        )}
-      </TouchableOpacity>
+          <Text style={styles.label}>First Name</Text>
+          <TextInput
+            style={[styles.input, fieldErrors.firstName && styles.inputError]}
+            placeholder="First Name"
+            placeholderTextColor="rgba(255, 255, 255, 0.5)"
+            value={firstName}
+            onChangeText={setFirstName}
+            autoCapitalize="words"
+          />
+          {fieldErrors.firstName && <Text style={styles.errorText}>{fieldErrors.firstName}</Text>}
 
-      <TouchableOpacity 
-        style={[styles.button, styles.logoutButton]}
-        onPress={handleLogout}
-      >
-        <Text style={styles.buttonText}>Logout</Text>
-      </TouchableOpacity>
+          <Text style={styles.label}>Middle Name</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Middle Name"
+            placeholderTextColor="rgba(255, 255, 255, 0.5)"
+            value={middleName}
+            onChangeText={setMiddleName}
+            autoCapitalize="words"
+          />
+
+          <Text style={styles.label}>Last Name</Text>
+          <TextInput
+            style={[styles.input, fieldErrors.lastName && styles.inputError]}
+            placeholder="Last Name"
+            placeholderTextColor="rgba(255, 255, 255, 0.5)"
+            value={lastName}
+            onChangeText={setLastName}
+            autoCapitalize="words"
+          />
+          {fieldErrors.lastName && <Text style={styles.errorText}>{fieldErrors.lastName}</Text>}
+
+          <Text style={styles.label}>Suffix</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Suffix (Jr., Sr., III, etc.)"
+            placeholderTextColor="rgba(255, 255, 255, 0.5)"
+            value={suffix}
+            onChangeText={setSuffix}
+            autoCapitalize="words"
+          />
+
+          <Text style={styles.label}>Phone Number</Text>
+          <View style={styles.phoneContainer}>
+            <TextInput
+              style={[styles.input, styles.countryCode]}
+              placeholder="+1"
+              placeholderTextColor="rgba(255, 255, 255, 0.5)"
+              value={countryCode}
+              onChangeText={(text) => {
+                // Ensure country code starts with +
+                const formattedText = text.startsWith('+') ? text : `+${text}`;
+                setCountryCode(formattedText);
+              }}
+              keyboardType="phone-pad"
+              autoCapitalize="none"
+            />
+            <TextInput
+              style={[styles.input, styles.phoneNumber, fieldErrors.phoneNumber && styles.inputError]}
+              placeholder="Phone Number"
+              placeholderTextColor="rgba(255, 255, 255, 0.5)"
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              keyboardType="phone-pad"
+              autoCapitalize="none"
+            />
+          </View>
+          {fieldErrors.phoneNumber && <Text style={styles.errorText}>{fieldErrors.phoneNumber}</Text>}
+        </View>
+
+        <TouchableOpacity 
+          style={[styles.button, saving && styles.buttonDisabled]}
+          onPress={updateProfile}
+          disabled={saving}
+        >
+          {saving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Save Changes</Text>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.button, styles.logoutButton]}
+          onPress={handleLogout}
+        >
+          <Text style={styles.buttonText}>Logout</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }

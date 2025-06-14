@@ -53,7 +53,7 @@ export default function StripeOnboardingScreen() {
         source={{ uri: onboardingUrl }}
         onNavigationStateChange={(navState) => {
           // Check account status when returning from Stripe
-          if (navState.url.includes('/onboarding/success')) {
+          if (typeof navState.url === 'string' && navState.url.includes('/onboarding/success')) {
             checkAccountStatus();
           }
         }}
