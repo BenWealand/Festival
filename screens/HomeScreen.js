@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Button } from 'react-native';
+import React, { useState, useEffect, useCallback, memo } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Button, Platform } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { COLORS } from '../constants/theme';
@@ -8,16 +8,76 @@ import { useNavigation } from '@react-navigation/native';
 import Animated, { useSharedValue, useAnimatedStyle, useAnimatedScrollHandler, withSpring, interpolate, Extrapolate, runOnJS } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { withTiming } from 'react-native-reanimated';
+import ChipSVG from '../assets/chip.svg';
+import Svg, { Defs, RadialGradient, LinearGradient as SvgLinearGradient, Rect, Stop, Path } from 'react-native-svg';
+import { BlurView } from 'expo-blur';
 // import { PanGestureHandler } from 'react-native-gesture-handler';
+
+const shadowBoxStyle = {
+  ...Platform.select({
+    ios: {
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 4.65,
+    },
+    android: {
+      elevation: 8,
+    },
+  }),
+};
+
+// Card dimensions and styling constants
+const CARD_HEIGHT = 220;
+const CARD_HEADER_HEIGHT = 70;
+const CARD_OFFSET = 64;
+const CARD_BORDER_RADIUS = 24;
+const CARD_MARGIN = 12;
+
+const cardBackground = require('../assets/cardBackground.png');
+
+// Deep, saturated base colors for each card (excluding 'coming soon')
+const CARD_SOLID_COLORS = [
+  '#1CA9C9', // deep cyan
+  '#C94F7C', // deep pink
+  '#F7A440', // deep orange
+  '#3B5BA9', // deep blue
+  '#3CA96B', // deep green
+  '#A05FA5', // deep purple
+  '#C9A13B', // deep gold
+  '#3B8FA9', // deep teal blue
+];
+
+// Helper to darken a hex color (increase amount for even darker gradients)
+function darken(hex, amount = 0.35) {
+  let c = hex.replace('#', '');
+  if (c.length === 3) c = c.split('').map(x => x + x).join('');
+  let [r, g, b] = [0, 2, 4].map(i => parseInt(c.substr(i, 2), 16));
+  r = Math.max(0, Math.floor(r * (1 - amount)));
+  g = Math.max(0, Math.floor(g * (1 - amount)));
+  b = Math.max(0, Math.floor(b * (1 - amount)));
+  return `#${[r, g, b].map(x => x.toString(16).padStart(2, '0')).join('')}`;
+}
+
+// Radial gradient overlays for each card (excluding 'coming soon')
+const CARD_RADIALS = CARD_SOLID_COLORS.map((base, i) => [
+  { cx: '30%', cy: '30%', r: '70%', color: '#000', opacity: 0.22 },
+  { cx: '70%', cy: '70%', r: '60%', color: '#000', opacity: 0.18 },
+  { cx: '50%', cy: '50%', r: '120%', color: '#000', opacity: 0.28 },
+]);
+
+// For the 'More Locations Coming Soon' card
+const COMING_SOON_COLOR = '#C94F7C'; // rich pink
+const COMING_SOON_RADIALS = [
+  { cx: '30%', cy: '30%', r: '70%', color: '#000', opacity: 0.22 },
+  { cx: '70%', cy: '70%', r: '60%', color: '#000', opacity: 0.18 },
+  { cx: '50%', cy: '50%', r: '120%', color: '#6B2B5B', opacity: 0.28 }, // dark purple accent
+];
 
 // CardStack for Apple Wallet-style UI
 function CardStack({ data, onCardPress }) {
   const navigation = useNavigation();
-  const CARD_HEIGHT = 220;
-  const CARD_HEADER_HEIGHT = 70;
-  const CARD_OFFSET = 65;
-  const CARD_BORDER_RADIUS = 12;
-  const CARD_MARGIN = 12;
   const [expandedIndex, setExpandedIndex] = useState(null);
   const [expandedTransactions, setExpandedTransactions] = useState([]);
   const [expandedLoading, setExpandedLoading] = useState(false);
@@ -30,129 +90,39 @@ function CardStack({ data, onCardPress }) {
   ];
   const reversedData = [...stackData].reverse();
 
-  const CARD_GRADIENTS = [
-    ['#e6a02e', '#e64a1a'], // softer orange to red
-    ['#3db890', '#145a9d'], // softer green to blue
-    ['#e69f7b', '#c76d77'], // softer peach to pink
-    ['#3db97b', '#28d9c7'], // softer green to teal
-    ['#6a8dad', '#7fa6c7', '#b2cbe4'], // less vibrant blue gradient
-    ['#20afb0', '#230867'], // softer teal to purple
-    ['#d7871e', '#e6c200'], // softer orange to yellow
-    ['#b461d5', '#da61bd'], // softer purple to pink
-  ];
+  // Persistent shared values for each card
+  const topArr = React.useRef(reversedData.map((_, i) => useSharedValue(i * CARD_OFFSET))).current;
+  const scaleArr = React.useRef(reversedData.map(() => useSharedValue(1))).current;
+  const opacityArr = React.useRef(reversedData.map(() => useSharedValue(1))).current;
+  const slideYArr = React.useRef(reversedData.map(() => useSharedValue(0))).current;
+  const detailsOpacityArr = React.useRef(reversedData.map(() => useSharedValue(0))).current;
 
-  const CardItem = ({ item, index }) => {
-    // index is for reversedData, so 0 is the bottom card (fully visible)
-    const animatedStyle = useAnimatedStyle(() => {
-      let top = index * CARD_OFFSET;
-      let height = CARD_HEIGHT;
-      let zIndex = index;
-      let scale = 1;
-      let boxShadow = 6;
-      let visible = true;
-
+  React.useEffect(() => {
+    reversedData.forEach((item, index) => {
       if (expandedIndex === index) {
-        top = 0;
-        zIndex = 999;
-        scale = 1.04;
-        boxShadow = 12;
-      } else if (expandedIndex !== null && expandedIndex !== index) {
-        // Hide all other cards when one is expanded
-        visible = false;
+        topArr[index].value = withSpring(0, { damping: 18 });
+        scaleArr[index].value = withSpring(1.04, { damping: 18 });
+        opacityArr[index].value = withTiming(1, { duration: 200 });
+        slideYArr[index].value = 0;
+        detailsOpacityArr[index].value = withTiming(1, { duration: 400 });
+      } else if (expandedIndex === null) {
+        topArr[index].value = withSpring(index * CARD_OFFSET, { damping: 18 });
+        scaleArr[index].value = withSpring(1, { damping: 18 });
+        opacityArr[index].value = withTiming(1, { duration: 200 });
+        slideYArr[index].value = 0;
+        detailsOpacityArr[index].value = withTiming(0, { duration: 150 });
+      } else {
+        topArr[index].value = withSpring(index * CARD_OFFSET, { damping: 18 });
+        scaleArr[index].value = withSpring(1, { damping: 18 });
+        opacityArr[index].value = withTiming(0, { duration: 200, delay: index * 30 });
+        slideYArr[index].value = withTiming(80, { duration: 300, delay: index * 30 });
+        detailsOpacityArr[index].value = withTiming(0, { duration: 150 });
       }
+    });
+  }, [expandedIndex, reversedData, topArr, scaleArr, opacityArr, slideYArr, detailsOpacityArr, CARD_OFFSET]);
 
-      return {
-        position: 'absolute',
-        left: CARD_MARGIN,
-        right: CARD_MARGIN,
-        top,
-        height: CARD_HEIGHT,
-        zIndex,
-        transform: [{ scale }],
-        elevation: boxShadow,
-        opacity: visible ? 1 : 0,
-      };
-    }, [expandedIndex]);
-
-    const isExpanded = expandedIndex === index;
-    const isAnyExpanded = expandedIndex !== null;
-    return (
-      <Animated.View
-        pointerEvents={isAnyExpanded && !isExpanded ? 'none' : 'auto'}
-        style={[
-          {
-            borderRadius: CARD_BORDER_RADIUS,
-            borderWidth: 1,
-            borderColor: COLORS.border,
-            marginBottom: CARD_MARGIN,
-            marginHorizontal: CARD_MARGIN,
-            backgroundColor: COLORS.surface.card,
-          },
-          animatedStyle,
-        ]}
-      >
-        <LinearGradient
-          colors={item.isComingSoon ? ['#ff4e8e', '#ff6bb5'] : CARD_GRADIENTS[index % CARD_GRADIENTS.length]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{ flex: 1, borderRadius: CARD_BORDER_RADIUS }}
-        >
-          <TouchableOpacity
-            style={{ flex: 1, borderRadius: CARD_BORDER_RADIUS }}
-            activeOpacity={0.95}
-            onPress={() => {
-              if (!item.isComingSoon) {
-                if (expandedIndex === index) {
-                  setExpandedIndex(null); // Collapse
-                } else {
-                  setExpandedIndex(index); // Expand
-                  // Fetch recent transactions for this location
-                  setExpandedLoading(true);
-                  setExpandedError(null);
-                  setExpandedTransactions([]);
-                  fetchRecentTransactions(item.id);
-                }
-              }
-            }}
-          >
-            <View style={{ flex: 1, borderRadius: CARD_BORDER_RADIUS }}>
-              {item.isComingSoon ? (
-                <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.text.white, textAlign: 'center' }}>
-                    {item.name}
-                  </Text>
-                </View>
-              ) : (
-                <>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: CARD_HEADER_HEIGHT }}>
-                    <Text style={{ fontSize: 20, fontWeight: '700', color: COLORS.text.white, flex: 1 }} numberOfLines={1} ellipsizeMode="tail">
-                      {item.name}
-                    </Text>
-                    <Text style={{ fontSize: 16, color: COLORS.text.white, marginLeft: 12, fontWeight: '700', flexShrink: 0 }} numberOfLines={1} ellipsizeMode="tail">
-                      ${(item.points / 100).toFixed(2)}
-                    </Text>
-                  </View>
-                  {/* Expanded details: Only visible when expanded */}
-                  {expandedIndex === index && (
-                    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-                      {item.logo_url ? (
-                        <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: COLORS.surface.primary, justifyContent: 'center', alignItems: 'center', marginTop: 16, marginBottom: 16 }}>
-                          <Image
-                            source={{ uri: item.logo_url }}
-                            style={{ width: 64, height: 64, borderRadius: 32 }}
-                          />
-                        </View>
-                      ) : null}
-                    </View>
-                  )}
-                </>
-              )}
-            </View>
-          </TouchableOpacity>
-        </LinearGradient>
-      </Animated.View>
-    );
-  };
+  // Container height for stacking
+  const containerHeight = CARD_HEIGHT + (reversedData.length - 1) * CARD_OFFSET + 2 * CARD_MARGIN;
 
   // Fetch recent transactions for a location
   const fetchRecentTransactions = async (locationId) => {
@@ -174,15 +144,40 @@ function CardStack({ data, onCardPress }) {
     }
   };
 
-  // Container height for stacking
-  const containerHeight = CARD_HEIGHT + (reversedData.length - 1) * CARD_OFFSET + 2 * CARD_MARGIN;
-
   return (
     <View style={{ marginTop: 32, backgroundColor: COLORS.surface.primary }}>
       <View style={{ height: containerHeight }}>
         {reversedData.map((item, index) => (
           <React.Fragment key={item.id}>
-            <CardItem item={item} index={index} />
+            <CardItem
+              item={item}
+              index={index}
+              expandedIndex={expandedIndex}
+              setExpandedIndex={setExpandedIndex}
+              expandedLoading={expandedLoading}
+              setExpandedLoading={setExpandedLoading}
+              expandedError={expandedError}
+              setExpandedError={setExpandedError}
+              expandedTransactions={expandedTransactions}
+              setExpandedTransactions={setExpandedTransactions}
+              fetchRecentTransactions={fetchRecentTransactions}
+              top={topArr[index]}
+              scale={scaleArr[index]}
+              opacity={opacityArr[index]}
+              slideY={slideYArr[index]}
+              detailsOpacity={detailsOpacityArr[index]}
+              CARD_HEADER_HEIGHT={CARD_HEADER_HEIGHT}
+              CARD_BORDER_RADIUS={CARD_BORDER_RADIUS}
+              CARD_MARGIN={CARD_MARGIN}
+              CARD_HEIGHT={CARD_HEIGHT}
+              CARD_SOLID_COLORS={CARD_SOLID_COLORS}
+              CARD_RADIALS={CARD_RADIALS}
+              COMING_SOON_COLOR={COMING_SOON_COLOR}
+              COMING_SOON_RADIALS={COMING_SOON_RADIALS}
+              shadowBoxStyle={shadowBoxStyle}
+              COLORS={COLORS}
+              totalCards={reversedData.length}
+            />
             {/* Expanded card details immediately below the expanded card */}
             {expandedIndex === index && !item.isComingSoon && (
               <View style={{ marginTop: 250, marginHorizontal: CARD_MARGIN }}>
@@ -240,7 +235,15 @@ function CardStack({ data, onCardPress }) {
                 </View>
                 {/* See all transactions link */}
                 {expandedTransactions.length > 2 && (
-                  <TouchableOpacity onPress={() => navigation.navigate('GlobalTransactions')} style={{ alignItems: 'center', marginTop: 12, marginBottom: 24 }}>
+                  <TouchableOpacity 
+                    onPress={() => navigation.navigate('GlobalTransactions', {
+                      screen: 'GlobalTransactions',
+                      params: {
+                        showBackButton: true
+                      }
+                    })} 
+                    style={{ alignItems: 'center', marginTop: 12, marginBottom: 24 }}
+                  >
                     <Text style={{ color: COLORS.text.white, fontWeight: 'bold', textDecorationLine: 'underline', fontSize: 14 }}>
                       All Transactions
                     </Text>
@@ -251,7 +254,9 @@ function CardStack({ data, onCardPress }) {
                   <Button
                     title="View Menu"
                     color={COLORS.primary}
-                    onPress={() => navigation.navigate('LocationMenu', { locationId: item.id })}
+                    onPress={() => navigation.navigate('LocationMenu', {
+                      locationId: item.id
+                    })}
                   />
                 </View>
                 {/* Deposit More Funds Button Row */}
@@ -259,7 +264,12 @@ function CardStack({ data, onCardPress }) {
                   <Button
                     title="Deposit More Funds"
                     color={'#3ec6e0'}
-                    onPress={() => navigation.navigate('Balance')}
+                    onPress={() => navigation.navigate('Balance', {
+                      screen: 'Balance',
+                      params: {
+                        showBackButton: true
+                      }
+                    })}
                   />
                 </View>
               </View>
@@ -270,6 +280,134 @@ function CardStack({ data, onCardPress }) {
     </View>
   );
 }
+
+// Update CardItem to use passed shared values
+const CardItem = memo(({ item, index, expandedIndex, setExpandedIndex, expandedLoading, setExpandedLoading, expandedError, setExpandedError, expandedTransactions, setExpandedTransactions, fetchRecentTransactions, top, scale, opacity, slideY, detailsOpacity, CARD_HEADER_HEIGHT, CARD_BORDER_RADIUS, CARD_MARGIN, CARD_HEIGHT, CARD_SOLID_COLORS, CARD_RADIALS, COMING_SOON_COLOR, COMING_SOON_RADIALS, shadowBoxStyle, COLORS, totalCards }) => {
+  const animatedStyle = useAnimatedStyle(() => {
+    const isExpanded = expandedIndex === index;
+    return {
+      position: 'absolute',
+      left: CARD_MARGIN,
+      right: CARD_MARGIN,
+      top: top.value,
+      height: CARD_HEIGHT,
+      zIndex: isExpanded ? 999 : index,
+      transform: isExpanded
+        ? [{ scale: scale.value }]
+        : [{ scale: scale.value }, { translateY: slideY.value }],
+      opacity: opacity.value,
+    };
+  });
+
+  const detailsAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: detailsOpacity.value,
+  }));
+
+  const isExpanded = expandedIndex === index;
+  const isAnyExpanded = expandedIndex !== null;
+
+  // Get the color for this card
+  const currentCardColor = (CARD_SOLID_COLORS && CARD_SOLID_COLORS.length > 0)
+    ? CARD_SOLID_COLORS[index % CARD_SOLID_COLORS.length]
+    : '#1CA9C9';
+
+  return (
+    <Animated.View
+      pointerEvents={isAnyExpanded && !isExpanded ? 'none' : 'auto'}
+      style={[
+        shadowBoxStyle,
+        {
+          borderRadius: CARD_BORDER_RADIUS,
+          borderWidth: 1,
+          borderColor: COLORS.border,
+          marginBottom: CARD_MARGIN,
+          marginHorizontal: CARD_MARGIN,
+          backgroundColor: COLORS.surface.card,
+          overflow: 'hidden',
+        },
+        animatedStyle,
+      ]}
+    >
+      <View style={{
+        position: 'absolute',
+        width: '100%',
+        height: '100%',
+        borderRadius: CARD_BORDER_RADIUS,
+        top: 0,
+        left: 0,
+        backgroundColor: item.isComingSoon ? COMING_SOON_COLOR : currentCardColor,
+      }} />
+      <BlurView
+        intensity={60}
+        style={{
+          position: 'absolute',
+          width: '100%',
+          height: '100%',
+          borderRadius: CARD_BORDER_RADIUS,
+          top: 0,
+          left: 0,
+          overflow: 'hidden',
+        }}
+      />
+      <TouchableOpacity
+        style={{ flex: 1, borderRadius: CARD_BORDER_RADIUS }}
+        activeOpacity={0.95}
+        onPress={() => {
+          if (!item.isComingSoon) {
+            if (expandedIndex === index) {
+              setExpandedIndex(null); // Collapse
+            } else {
+              setExpandedIndex(index); // Expand
+              // Fetch recent transactions for this location
+              setExpandedLoading(true);
+              setExpandedError(null);
+              setExpandedTransactions([]);
+              fetchRecentTransactions(item.id);
+            }
+          }
+        }}
+      >
+        <View style={{ flex: 1, borderRadius: CARD_BORDER_RADIUS }}>
+          {/* Card Chip (not on 'coming soon' card) */}
+          {!item.isComingSoon && (
+            <View style={{ position: 'absolute', top: '38%', left: 32, zIndex: 10 }}>
+              <ChipSVG width={40} height={32} />
+            </View>
+          )}
+          {item.isComingSoon ? (
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+              <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.text.white, textAlign: 'center' }}>
+                {item.name}
+              </Text>
+            </View>
+          ) : (
+            <>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, height: CARD_HEADER_HEIGHT }}>
+                <Text style={{ fontSize: 20, fontWeight: '700', color: COLORS.text.white, flex: 1 }} numberOfLines={1} ellipsizeMode="tail">
+                  {item.name}
+                </Text>
+                <Text style={{ fontSize: 16, color: COLORS.text.white, marginLeft: 12, fontWeight: '700', flexShrink: 0 }} numberOfLines={1} ellipsizeMode="tail">
+                  ${(item.points / 100).toFixed(2)}
+                </Text>
+              </View>
+              {/* Animated details section */}
+              <Animated.View style={[{ flex: 1, justifyContent: 'center', alignItems: 'center' }, detailsAnimatedStyle]}>
+                {isExpanded && item.logo_url ? (
+                  <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: COLORS.surface.primary, justifyContent: 'center', alignItems: 'center', marginTop: 16, marginBottom: 16 }}>
+                    <Image
+                      source={{ uri: item.logo_url }}
+                      style={{ width: 64, height: 64, borderRadius: 32 }}
+                    />
+                  </View>
+                ) : null}
+              </Animated.View>
+            </>
+          )}
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+});
 
 export default function HomeScreen() {
   const navigation = useNavigation();
@@ -455,7 +593,8 @@ export default function HomeScreen() {
             id: location.id,
             name: location.name,
             logo_url: location.logo_url,
-            points: location.balances?.[0]?.balance || 0
+            points: location.balances?.[0]?.balance || 0,
+            isComingSoon: false  // Explicitly set this to false for all regular locations
           })) || []
         });
       }
@@ -955,5 +1094,30 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 8,
+  },
+  cardStackContainer: {
+    marginTop: 32,
+    backgroundColor: COLORS.surface.primary,
+  },
+  card: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  cardContent: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  cardTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    marginBottom: 8,
+  },
+  cardSubtitle: {
+    fontSize: 16,
+    color: 'rgba(255, 255, 255, 0.8)',
   },
 }); 

@@ -1,0 +1,23 @@
+[
+  "admin", "administrator", "root", "system", "support", "helpdesk", "moderator", "mod", "staff",
+  "dev", "developer", "owner", "founder", "test", "tester", "api", "bot", "server",
+
+  "god", "jesus", "satan", "pope", "president", "prime minister", "king", "queen", "prince", "lord",
+  "prophet", "imam", "rabbi", "bishop", "saint",
+
+  "elonmusk", "billgates", "jeffbezos", "obama", "trump", "biden", "putin", "kanye", "taylor", "zendaya",
+
+  "ass", "anal", "anus", "arse", "bastard", "bitch", "blowjob", "boner", "cock", "cum", "cunt",
+  "dick", "dildo", "dyke", "fag", "faggot", "fuck", "fuk", "goddamn", "hell", "homo", "jizz", "kike",
+  "nigger", "nigga", "penis", "piss", "poop", "porn", "prostitute", "pussy", "queef", "retard",
+  "shit", "slut", "tit", "tits", "twat", "vagina", "wank", "whore",
+
+  "nazi", "hitler", "holocaust", "fascist", "isis", "taliban", "jihad", "kkk", "lynch", "whitepower", "racewar",
+
+  "null", "undefined", "login", "logout", "signin", "signup", "password", "pass", "verify",
+  "token", "key", "session", "stripe", "supabase", "google", "facebook", "apple", "api_key",
+
+  "user", "guest", "anonymous", "anon", "spam", "test", "testuser", "unknown", "default", "demo", "temp", "trial", "account", "newuser",
+
+  "f@ggot", "sh1t", "d1ck", "b1tch", "c0ck", "f*ck", "n1gger", "p0rn", "c*m", "p*ssy"
+]

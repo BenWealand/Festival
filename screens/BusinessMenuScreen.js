@@ -195,6 +195,15 @@ export default function BusinessMenuScreen() {
   }
 
   if (error) {
+    // If the error is due to no location for owner, show a relevant message
+    if (error === 'Failed to load menu' && user?.id) {
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorText}>No business location found for your account. Please contact support.</Text>
+        </View>
+      );
+    }
+    // Otherwise, show the error
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error}</Text>

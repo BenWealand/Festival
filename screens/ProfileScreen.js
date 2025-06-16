@@ -4,6 +4,14 @@ import { supabase } from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { COLORS } from '../constants/theme';
 import { FontAwesome } from '@expo/vector-icons';
+import nameBlacklist from '../nameBlacklist.json';
+
+// Blacklist of inappropriate words/phrases (imported from JSON)
+function containsBlacklistedWord(str) {
+  if (!str) return false;
+  const lower = str.toLowerCase();
+  return nameBlacklist.some(word => lower.includes(word));
+}
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
@@ -109,6 +117,13 @@ export default function ProfileScreen() {
     if (!lastName.trim()) errors.lastName = 'Last name is required';
     if (!phoneNumber.trim()) errors.phoneNumber = 'Phone number is required';
     
+    // Blacklist check for all name fields
+    if (containsBlacklistedWord(username)) errors.username = 'Inappropriate words are not allowed in your username.';
+    if (containsBlacklistedWord(firstName)) errors.firstName = 'Inappropriate words are not allowed in your first name.';
+    if (containsBlacklistedWord(middleName)) errors.middleName = 'Inappropriate words are not allowed in your middle name.';
+    if (containsBlacklistedWord(lastName)) errors.lastName = 'Inappropriate words are not allowed in your last name.';
+    if (containsBlacklistedWord(suffix)) errors.suffix = 'Inappropriate words are not allowed in your suffix.';
+
     setFieldErrors(errors);
     return Object.keys(errors).length === 0;
   };

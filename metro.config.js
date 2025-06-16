@@ -1,39 +1,16 @@
 const { getDefaultConfig } = require('@expo/metro-config');
-
-const config = getDefaultConfig(__dirname);
+const defaultConfig = getDefaultConfig(__dirname);
 
 module.exports = {
-  ...config,
+  ...defaultConfig,
   transformer: {
-    ...config.transformer,
-    getTransformOptions: async () => ({
-      transform: {
-        experimentalImportSupport: false,
-        inlineRequires: true,
-      },
-    }),
+    ...defaultConfig.transformer,
+    babelTransformerPath: require.resolve('react-native-svg-transformer'),
+    assetPlugins: ['expo-asset/tools/hashAssetFiles'],
   },
   resolver: {
-    ...config.resolver,
-    unstable_enablePackageExports: false, // 🔧 <- This line fixes the Supabase `stream` issue
-    sourceExts: [...config.resolver.sourceExts, 'mjs'],
-    assetExts: [
-      ...config.resolver.assetExts,
-      'ttf',
-      'png',
-      'jpg',
-      'reanimated'
-    ],
-  },
-  server: {
-    ...config.server,
-    enhanceMiddleware: (middleware) => {
-      return (req, res, next) => {
-        if (req.url.endsWith('.bundle')) {
-          res.setHeader('Content-Type', 'application/javascript');
-        }
-        return middleware(req, res, next);
-      };
-    },
+    ...defaultConfig.resolver,
+    assetExts: defaultConfig.resolver.assetExts.filter(ext => ext !== 'svg'),
+    sourceExts: [...defaultConfig.resolver.sourceExts, 'svg'],
   },
 };

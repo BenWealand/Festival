@@ -19,6 +19,21 @@ export default function LocationMenuScreen() {
   const [showCart, setShowCart] = useState(false);
   const { user } = useAuth();
 
+  // Set navigation options
+  React.useLayoutEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={{ marginLeft: 16, flexDirection: 'row', alignItems: 'center' }}
+        >
+          <FontAwesome name="arrow-left" size={16} color={COLORS.text.white} style={{ marginRight: 8 }} />
+          <Text style={{ color: COLORS.text.white, fontSize: 16 }}>Back</Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
+
   useEffect(() => {
     if (locationId) {
       fetchLocationAndMenu();
@@ -108,18 +123,16 @@ export default function LocationMenuScreen() {
 
   return (
     <View style={{ flex: 1 }}>
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <FontAwesome name="arrow-left" size={24} color={COLORS.text.white} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{location?.name || 'Menu'}</Text>
+      </View>
       <ScrollView style={styles.container}>
-        <View style={styles.header}>
-          {location?.logo_url ? (
-            <Image 
-              source={{ uri: location.logo_url }} 
-              style={styles.logo}
-              resizeMode="cover"
-            />
-          ) : null}
-          <Text style={styles.locationName}>{location?.name}</Text>
-        </View>
-
         {/* Add button to view transactions */}
         <TouchableOpacity 
           style={styles.viewTransactionsButton}
@@ -222,10 +235,20 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   header: {
-    padding: 20,
+    flexDirection: 'row',
     alignItems: 'center',
+    padding: 16,
+    backgroundColor: COLORS.surface.secondary,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
+  },
+  backButton: {
+    marginRight: 16,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.text.white,
   },
   logo: {
     width: 100,

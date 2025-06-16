@@ -22,6 +22,21 @@ export default function BalanceScreen() {
   const { user, session } = useAuth();
   const [balances, setBalances] = useState({});
 
+  // Set navigation options
+  React.useLayoutEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={{ marginLeft: 16, flexDirection: 'row', alignItems: 'center' }}
+        >
+          <FontAwesome name="arrow-left" size={16} color={COLORS.text.white} style={{ marginRight: 8 }} />
+          <Text style={{ color: COLORS.text.white, fontSize: 16 }}>Back</Text>
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -176,7 +191,16 @@ export default function BalanceScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={{ flex: 1, backgroundColor: COLORS.surface.primary }}>
+      <View style={styles.header}>
+        <TouchableOpacity 
+          style={styles.backButton}
+          onPress={() => navigation.goBack()}
+        >
+          <FontAwesome name="arrow-left" size={24} color={COLORS.text.white} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Add Balance</Text>
+      </View>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.gridContainer}>
           {locations.map((location) => (
@@ -411,5 +435,21 @@ const styles = StyleSheet.create({
     color: COLORS.text.white,
     fontSize: 16,
     fontWeight: '600',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: COLORS.surface.secondary,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  backButton: {
+    marginRight: 16,
+  },
+  headerTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.text.white,
   },
 }); 

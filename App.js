@@ -35,6 +35,7 @@ import LocationTransactionsScreen from './screens/LocationTransactionsScreen';
 import GlobalTransactionsScreen from './screens/GlobalTransactionsScreen';
 import ActiveOrdersScreen from './screens/ActiveOrdersScreen';
 import ScrollableTabBar from './components/ScrollableTabBar';
+import EmployeeTipsScreen from './screens/EmployeeTipsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -45,6 +46,7 @@ const BUSINESS_TABS = [
   { name: 'Customers', component: CustomersScreen, icon: 'users', label: 'Customers' },
   { name: 'ActiveOrders', component: ActiveOrdersScreen, icon: 'shopping-basket', label: 'Active Orders' },
   { name: 'Analytics', component: AnalyticsScreen, icon: 'bar-chart', label: 'Analytics' },
+  { name: 'EmployeeTips', component: EmployeeTipsScreen, icon: 'money', label: 'Tips' },
   { name: 'Settings', component: SettingsScreen, icon: 'cog', label: 'Settings' },
 ];
 

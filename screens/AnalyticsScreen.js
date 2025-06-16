@@ -5,172 +5,298 @@ import {
   StyleSheet, 
   ScrollView, 
   ActivityIndicator,
+  Image,
+  TouchableOpacity,
+  Modal,
+  Dimensions,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { COLORS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
+import { startOfDay, startOfWeek, startOfMonth, subMonths, subYears } from 'date-fns';
+import { LineChart } from 'react-native-chart-kit';
 
 export default function AnalyticsScreen() {
   const { user } = useAuth();
+  const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [analytics, setAnalytics] = useState({
-    dailyRedemptions: [],
+    totalDeposits: 0,
+    totalRedemptions: 0,
+    cashbackDistributed: 0,
+    netRevenue: 0,
+    newUsers: 0,
+    returningUsers: 0,
+    returningUsersPercent: 0,
     topItems: [],
+    logo_url: '',
+    locationName: '',
+    graphData: [],
     customerMetrics: {
       totalCustomers: 0,
       averageRedemptionValue: 0,
-      repeatCustomers: 0
+      repeatCustomers: 0,
     },
     timeMetrics: {
       busiestHour: '',
       busiestDay: '',
-      averageRedemptionValue: 0
+      averageRedemptionValue: 0,
     },
-    amountLeftToRedeem: 0,
-    totalRevenueDeposits: 0
+    chartData: {
+      dayLabels: [],
+      dailyDeposits: [],
+      dailyRedemptions: [],
+    },
   });
   const [tipsByEmployee, setTipsByEmployee] = useState([]);
+  const [timeRange, setTimeRange] = useState('week');
+  const [showTimeRangeModal, setShowTimeRangeModal] = useState(false);
+  const timeRanges = [
+    { label: 'All Time', value: 'all' },
+    { label: 'Day', value: 'day' },
+    { label: 'Week', value: 'week' },
+    { label: 'Month', value: 'month' },
+    { label: '3 Month', value: '3month' },
+    { label: '6 Month', value: '6month' },
+    { label: 'Year', value: 'year' },
+  ];
 
   useEffect(() => {
     fetchAnalytics();
-  }, []);
+  }, [timeRange]);
+
+  const getRangeStart = () => {
+    if (timeRange === 'all') return null;
+    const now = new Date();
+    switch (timeRange) {
+      case 'day':
+        return startOfDay(now);
+      case 'week':
+        return startOfWeek(now, { weekStartsOn: 1 });
+      case 'month':
+        return startOfMonth(now);
+      case '3month':
+        return subMonths(now, 3);
+      case '6month':
+        return subMonths(now, 6);
+      case 'year':
+        return subYears(now, 1);
+      default:
+        return null;
+    }
+  };
 
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
-      
-      // Get location ID for the owner
+      setError(null);
+      // Get location for owner
       const { data: location, error: locationError } = await supabase
         .from('locations')
-        .select('id')
+        .select('*')
         .eq('owner_id', user.id)
         .single();
-
       if (locationError) throw locationError;
-
-      // Fetch last 7 days of revenue
-      const { data: dailyRedemptionsData, error: revenueError } = await supabase
-        .from('daily_revenue')
-        .select('*')
-        .gte('date', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString())
-        .order('date', { ascending: true });
-
-      if (revenueError) throw revenueError;
-
-      // Fetch top selling items
-      const { data: topItems, error: itemsError } = await supabase
-        .from('menu_item_analytics')
-        .select('*')
-        .order('total_orders', { ascending: false })
-        .limit(5);
-
-      if (itemsError) throw itemsError;
-
-      // Fetch customer metrics
-      const { data: customerData, error: customerError } = await supabase
-        .from('customer_analytics')
-        .select('*');
-
-      if (customerError) throw customerError;
-
-      // Calculate customer metrics
-      const customerMetrics = {
-        totalCustomers: customerData.length,
-        averageRedemptionValue: customerData.reduce((acc, curr) => acc + curr.total_spent, 0) / (customerData.length || 1) / 100,
-        repeatCustomers: customerData.filter(c => c.total_orders > 1).length
-      };
-
-      // Fetch total balance for the location
-      const { data: totalBalanceData, error: totalBalanceError } = await supabase
-        .from('balances')
-        .select('balance')
-        .eq('location_id', location.id);
-      
-      if (totalBalanceError) throw totalBalanceError;
-      const amountLeftToRedeem = totalBalanceData.reduce((sum, item) => sum + item.balance, 0);
-      
-      // Calculate time metrics from transactions
-      const { data: timeData, error: timeError } = await supabase
-        .from('transactions')
-        .select('created_at, amount')
-        .eq('location_id', location.id);
-
-      if (timeError) throw timeError;
-
-      const timeMetrics = calculateTimeMetrics(timeData);
-
-      // Fetch total deposits for the location
-      const { data: totalDepositsData, error: totalDepositsError } = await supabase
+      setLocation(location);
+      const locationId = location.id;
+      // Time range filter
+      const rangeStart = getRangeStart();
+      // Fetch deposits in range
+      let depositsQuery = supabase
         .from('deposits')
-        .select('amount')
-        .eq('location_id', location.id);
-
-      if (totalDepositsError) throw totalDepositsError;
-
-      const totalRevenueDeposits = totalDepositsData.reduce((sum, item) => sum + item.amount, 0);
-
-      // Fetch tips by employee (join through transactions for location)
-      const { data: tipsData, error: tipsError } = await supabase
-        .from('tips')
-        .select('amount, employee_id, employees(name), transactions(location_id)')
-        .eq('transactions.location_id', location.id);
-      if (tipsError) throw tipsError;
-      // Group and sum tips by employee
-      const tipsMap = {};
-      for (const tip of tipsData) {
-        const empId = tip.employee_id;
-        const empName = tip.employees?.name || 'Unknown';
-        if (!tipsMap[empId]) tipsMap[empId] = { name: empName, total: 0 };
-        tipsMap[empId].total += tip.amount;
+        .select('*')
+        .eq('location_id', locationId);
+      if (rangeStart) depositsQuery = depositsQuery.gte('created_at', rangeStart.toISOString());
+      const { data: deposits, error: depositsError } = await depositsQuery;
+      if (depositsError) throw depositsError;
+      // Fetch all deposits for new/returning user logic
+      const { data: allDeposits, error: allDepositsError } = await supabase
+        .from('deposits')
+        .select('user_id, created_at')
+        .eq('location_id', locationId);
+      if (allDepositsError) throw allDepositsError;
+      // Fetch transactions in range
+      let transactionsQuery = supabase
+        .from('transactions')
+        .select('*')
+        .eq('location_id', locationId);
+      if (rangeStart) transactionsQuery = transactionsQuery.gte('created_at', rangeStart.toISOString());
+      const { data: transactions, error: transactionsError } = await transactionsQuery;
+      if (transactionsError) throw transactionsError;
+      // Fetch all transactions for graph
+      const { data: allTransactions, error: allTransactionsError } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('location_id', locationId);
+      if (allTransactionsError) throw allTransactionsError;
+      // Fetch transaction_items for top items
+      const { data: transactionItems, error: transactionItemsError } = await supabase
+        .from('transaction_items')
+        .select('menu_item_id, quantity, price_at_time, created_at, transaction_id')
+        .in('transaction_id', transactions.map(t => t.id));
+      if (transactionItemsError) throw transactionItemsError;
+      // Fetch menu_items for names
+      const { data: menuItems, error: menuItemsError } = await supabase
+        .from('menu_items')
+        .select('id, name, price');
+      if (menuItemsError) throw menuItemsError;
+      // --- Calculate stats ---
+      // Total Deposits
+      const totalDeposits = deposits.reduce((sum, d) => sum + (d.amount || 0), 0);
+      // Amount Redeemed (sum of redemption amounts)
+      const amountRedeemed = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+      // Total Redemptions (count)
+      const totalRedemptions = transactions.length;
+      // Left to Redeem (deposits - amount redeemed)
+      const leftToRedeem = totalDeposits - amountRedeemed;
+      // New/Returning Users
+      const userFirstDeposit = {};
+      allDeposits.forEach(d => {
+        if (!userFirstDeposit[d.user_id] || new Date(d.created_at) < new Date(userFirstDeposit[d.user_id])) {
+          userFirstDeposit[d.user_id] = d.created_at;
+        }
+      });
+      const usersInRange = new Set(deposits.map(d => d.user_id));
+      let newUsers = 0;
+      let returningUsers = 0;
+      usersInRange.forEach(userId => {
+        const firstDeposit = userFirstDeposit[userId];
+        if (firstDeposit && new Date(firstDeposit) >= rangeStart) {
+          newUsers++;
+        } else {
+          returningUsers++;
+        }
+      });
+      const returningUsersPercent = usersInRange.size > 0 ? Math.round((returningUsers / usersInRange.size) * 100) : 0;
+      // Customer Metrics
+      // totalCustomers: unique depositors (all time)
+      const allDepositorIds = allDeposits.map(d => d.user_id);
+      const uniqueDepositors = Array.from(new Set(allDepositorIds));
+      // repeatCustomers: users with >1 deposit (all time)
+      const depositCounts = {};
+      allDepositorIds.forEach(id => { depositCounts[id] = (depositCounts[id] || 0) + 1; });
+      const repeatCustomers = Object.values(depositCounts).filter(count => count > 1).length;
+      // averageRedemptionValue: average transaction amount in range
+      const averageRedemptionValue = transactions.length > 0 ? transactions.reduce((sum, t) => sum + (t.amount || 0), 0) / transactions.length / 100 : 0;
+      // Top Items
+      const itemMap = {};
+      transactionItems.forEach(ti => {
+        if (!itemMap[ti.menu_item_id]) {
+          itemMap[ti.menu_item_id] = { uses: 0, redempd: 0, revenue: 0, price: 0 };
+        }
+        itemMap[ti.menu_item_id].uses += ti.quantity;
+        itemMap[ti.menu_item_id].redempd++;
+        itemMap[ti.menu_item_id].revenue += ti.price_at_time * ti.quantity;
+        itemMap[ti.menu_item_id].price = ti.price_at_time / 100;
+      });
+      const topItems = Object.entries(itemMap).map(([id, data]) => {
+        const menuItem = menuItems.find(m => m.id === id);
+        return {
+          name: menuItem ? menuItem.name : 'Unknown',
+          order_count: data.redempd,
+          uses: data.uses,
+          price: data.price,
+          revenue: data.revenue / 100,
+        };
+      }).sort((a, b) => b.order_count - a.order_count).slice(0, 5);
+      // Graph Data (daily revenue breakdown)
+      // (Placeholder: just return all transactions in range for now)
+      const graphData = allTransactions.filter(t => new Date(t.created_at) >= rangeStart);
+      // Time Metrics
+      // busiestHour, busiestDay, averageRedemptionValue (for selected range)
+      const hourlyCounts = Array(24).fill(0);
+      const dailyCounts = Array(7).fill(0);
+      let totalAmount = 0;
+      transactions.forEach(t => {
+        const date = new Date(t.created_at);
+        hourlyCounts[date.getHours()]++;
+        dailyCounts[date.getDay()]++;
+        totalAmount += t.amount || 0;
+      });
+      const busiestHourIdx = hourlyCounts.indexOf(Math.max(...hourlyCounts));
+      const busiestDayIdx = dailyCounts.indexOf(Math.max(...dailyCounts));
+      const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+      const busiestHour = busiestHourIdx >= 0 ? `${busiestHourIdx}:00` : 'N/A';
+      const busiestDay = busiestDayIdx >= 0 ? dayNames[busiestDayIdx] : 'N/A';
+      const avgRedemptionValue = transactions.length > 0 ? totalAmount / transactions.length / 100 : 0;
+      // Prepare daily data for charts
+      // Determine date range
+      let chartStart = rangeStart;
+      let chartEnd = new Date();
+      if (!chartStart) {
+        // If all time, use earliest deposit or transaction
+        const allDates = [...deposits.map(d => new Date(d.created_at)), ...transactions.map(t => new Date(t.created_at))];
+        if (allDates.length > 0) {
+          chartStart = new Date(Math.min(...allDates.map(d => d.getTime())));
+        } else {
+          chartStart = new Date();
+        }
       }
-      setTipsByEmployee(Object.values(tipsMap));
-
+      // Build list of days
+      const days = [];
+      let d = new Date(chartStart);
+      d.setHours(0,0,0,0);
+      while (d <= chartEnd) {
+        days.push(new Date(d));
+        d = new Date(d);
+        d.setDate(d.getDate() + 1);
+      }
+      // Daily totals for deposits
+      const dailyDeposits = days.map(day => {
+        const dayStr = day.toISOString().slice(0,10);
+        return deposits.filter(dep => dep.created_at.slice(0,10) === dayStr).reduce((sum, dep) => sum + (dep.amount || 0), 0) / 100;
+      });
+      // Daily totals for redemptions
+      const dailyRedemptions = days.map(day => {
+        const dayStr = day.toISOString().slice(0,10);
+        return transactions.filter(tx => tx.created_at.slice(0,10) === dayStr).reduce((sum, tx) => sum + (tx.amount || 0), 0) / 100;
+      });
+      // Always show exactly 4 labels: first, 1/3, 2/3, last
+      let dayLabels = Array(days.length).fill('');
+      if (days.length > 0) {
+        const idx1 = 0;
+        const idx2 = Math.floor(days.length / 3);
+        const idx3 = Math.floor(days.length * 2 / 3);
+        const idx4 = days.length - 1;
+        dayLabels[idx1] = `${days[idx1].getMonth()+1}/${days[idx1].getDate()}`;
+        if (idx2 !== idx1 && idx2 !== idx4) dayLabels[idx2] = `${days[idx2].getMonth()+1}/${days[idx2].getDate()}`;
+        if (idx3 !== idx1 && idx3 !== idx2 && idx3 !== idx4) dayLabels[idx3] = `${days[idx3].getMonth()+1}/${days[idx3].getDate()}`;
+        if (idx4 !== idx1) dayLabels[idx4] = `${days[idx4].getMonth()+1}/${days[idx4].getDate()}`;
+      }
       setAnalytics({
-        dailyRedemptions: dailyRedemptionsData.map(day => ({
-          date: new Date(day.date).toLocaleDateString(),
-          amount: day.total_revenue / 100 // This is actually total redeemed for the day
-        })),
-        topItems: topItems.map(item => ({
-          name: item.name,
-          price: item.price / 100,
-          order_count: item.total_orders
-        })),
-        customerMetrics,
-        timeMetrics,
-        amountLeftToRedeem,
-        totalRevenueDeposits: totalRevenueDeposits,
+        totalDeposits,
+        totalRedemptions,
+        amountRedeemed,
+        leftToRedeem,
+        newUsers,
+        returningUsers,
+        returningUsersPercent,
+        topItems,
+        logo_url: location.logo_url,
+        locationName: location.name,
+        graphData,
+        customerMetrics: {
+          totalCustomers: uniqueDepositors.length,
+          averageRedemptionValue,
+          repeatCustomers,
+        },
+        timeMetrics: {
+          busiestHour,
+          busiestDay,
+          averageRedemptionValue: avgRedemptionValue,
+        },
+        chartData: {
+          dayLabels,
+          dailyDeposits,
+          dailyRedemptions,
+        },
       });
     } catch (err) {
-      console.error('Error fetching analytics:', err);
       setError('Failed to load analytics data');
     } finally {
       setLoading(false);
     }
-  };
-
-  const calculateTimeMetrics = (data) => {
-    const hourlyOrders = new Array(24).fill(0);
-    const dailyOrders = new Array(7).fill(0);
-    let totalAmount = 0;
-
-    data.forEach(transaction => {
-      const date = new Date(transaction.created_at);
-      hourlyOrders[date.getHours()]++;
-      dailyOrders[date.getDay()]++;
-      totalAmount += transaction.amount;
-    });
-
-    const busiestHour = hourlyOrders.indexOf(Math.max(...hourlyOrders));
-    const busiestDay = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][
-      dailyOrders.indexOf(Math.max(...dailyOrders))
-    ];
-
-    return {
-      busiestHour: `${busiestHour}:00`,
-      busiestDay: busiestDay || 'N/A',
-      averageRedemptionValue: totalAmount / (data.length * 100)
-    };
   };
 
   if (loading) {
@@ -192,99 +318,207 @@ export default function AnalyticsScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      {/* Amount Left to Redeem */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Current Balances</Text>
-        <View style={styles.metricsGrid}>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>${(analytics.amountLeftToRedeem / 100).toFixed(2)}</Text>
-            <Text style={styles.metricLabel}>Amount Left to Redeem</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Total Revenue (Deposits) */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Total Revenue (Deposits)</Text>
-        <View style={styles.metricsGrid}>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>${(analytics.totalRevenueDeposits / 100).toFixed(2)}</Text>
-            <Text style={styles.metricLabel}>Total Revenue</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Tips by Employee */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Tips by Employee</Text>
-        {tipsByEmployee.length === 0 ? (
-          <Text style={styles.noteText}>No tips recorded yet.</Text>
+      {/* Header: Logo and Title */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 24, marginBottom: 8, paddingHorizontal: 20 }}>
+        {analytics.logo_url ? (
+          <Image
+            source={{ uri: analytics.logo_url }}
+            style={{ width: 48, height: 48, borderRadius: 24, marginRight: 12 }}
+            resizeMode="cover"
+          />
         ) : (
-          tipsByEmployee.map((emp, idx) => (
-            <View key={idx} style={styles.revenueRow}>
-              <Text style={styles.itemName}>{emp.name}</Text>
-              <Text style={styles.amountText}>${(emp.total / 100).toFixed(2)}</Text>
+          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
+            <Text style={{ color: COLORS.text.white, fontWeight: 'bold', fontSize: 24 }}>?</Text>
+          </View>
+        )}
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: COLORS.text.white, fontWeight: 'bold', fontSize: 18 }}>{analytics.locationName || 'Business Name'}</Text>
+        </View>
+        <TouchableOpacity
+          style={{ marginLeft: 8, minWidth: 120, backgroundColor: COLORS.surface.card, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' }}
+          onPress={() => setShowTimeRangeModal(true)}
+        >
+          <Text style={{ color: COLORS.text.white, fontWeight: '600' }}>{timeRanges.find(r => r.value === timeRange)?.label || 'Select Range'}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Time Range Selection Modal */}
+      <Modal visible={showTimeRangeModal} transparent animationType="slide" onRequestClose={() => setShowTimeRangeModal(false)}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <View style={{ backgroundColor: COLORS.surface.card, borderRadius: 12, padding: 24, width: '90%', maxWidth: 400 }}>
+            <Text style={{ color: COLORS.text.white, fontSize: 18, fontWeight: 'bold', marginBottom: 16 }}>Select Time Range</Text>
+            {timeRanges.map(range => (
+              <TouchableOpacity
+                key={range.value}
+                style={{ padding: 12, backgroundColor: timeRange === range.value ? COLORS.primary : COLORS.surface.secondary, borderRadius: 8, marginBottom: 8 }}
+                onPress={() => {
+                  setTimeRange(range.value);
+                  setShowTimeRangeModal(false);
+                }}
+              >
+                <Text style={{ color: COLORS.text.white }}>{range.label}</Text>
+              </TouchableOpacity>
+            ))}
+            <View style={{ flexDirection: 'row', marginTop: 16 }}>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: COLORS.surface.secondary, padding: 12, borderRadius: 8, alignItems: 'center' }}
+                onPress={() => setShowTimeRangeModal(false)}
+              >
+                <Text style={{ color: COLORS.text.white }}>Cancel</Text>
+              </TouchableOpacity>
             </View>
-          ))
+          </View>
+        </View>
+      </Modal>
+
+      {/* Overview Section */}
+      <View style={[styles.section, { marginHorizontal: 16, marginTop: 8, marginBottom: 16, backgroundColor: COLORS.surface.card }]}> 
+        {/* Overview Title: More natural language for each time range */}
+        <Text style={{ color: COLORS.text.muted, fontWeight: '600', fontSize: 16, marginBottom: 8 }}>
+          {(() => {
+            switch (timeRange) {
+              case 'all': return 'Overview (All Time)';
+              case 'day': return 'Overview (Today)';
+              case 'week': return 'Overview (This Week)';
+              case 'month': return 'Overview (This Month)';
+              case '3month': return 'Overview (Last 3 Months)';
+              case '6month': return 'Overview (Last 6 Months)';
+              case 'year': return 'Overview (This Year)';
+              default: return 'Overview';
+            }
+          })()}
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+          <View style={{ width: '48%', marginBottom: 8, alignItems: 'center' }}>
+            <Text style={styles.metricLabel}>Total Deposits</Text>
+            <Text style={styles.metricValue}>${(analytics.totalDeposits / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+          </View>
+          <View style={{ width: '48%', marginBottom: 8, alignItems: 'center' }}>
+            <Text style={styles.metricLabel}>Total Redemptions</Text>
+            <Text style={styles.metricValue}>{analytics.totalRedemptions}</Text>
+          </View>
+          <View style={{ width: '48%', marginBottom: 8, alignItems: 'center' }}>
+            <Text style={styles.metricLabel}>Amount Redeemed</Text>
+            <Text style={styles.metricValue}>${(analytics.amountRedeemed / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+          </View>
+          <View style={{ width: '48%', marginBottom: 8, alignItems: 'center' }}>
+            <Text style={styles.metricLabel}>Left to Redeem</Text>
+            <Text style={styles.metricValue}>${(analytics.leftToRedeem / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+          </View>
+          <View style={{ width: '48%', marginBottom: 8, alignItems: 'center' }}>
+            <Text style={styles.metricLabel}>New Users</Text>
+            <Text style={styles.metricValue}>+{analytics.newUsers}</Text>
+          </View>
+          <View style={{ width: '48%', marginBottom: 8, alignItems: 'center' }}>
+            <Text style={styles.metricLabel}>% Returning Users</Text>
+            <Text style={styles.metricValue}>{analytics.returningUsersPercent}%</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Daily Revenue Breakdown (Line Charts) */}
+      <View style={[styles.section, { marginHorizontal: 16, marginBottom: 16, backgroundColor: COLORS.surface.card }]}> 
+        <Text style={{ color: COLORS.text.white, fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>Daily Revenue Breakdown</Text>
+        {/* Redemptions Chart */}
+        <Text style={{ color: COLORS.text.muted, fontWeight: '600', marginBottom: 2 }}>Redemptions</Text>
+        {analytics.chartData && analytics.chartData.dailyRedemptions.length > 0 ? (
+          <View>
+            <LineChart
+              data={{
+                labels: analytics.chartData.dayLabels,
+                datasets: [
+                  { data: analytics.chartData.dailyRedemptions, color: () => COLORS.primary, strokeWidth: 2 },
+                ],
+              }}
+              width={Dimensions.get('window').width - 56}
+              height={120}
+              chartConfig={{
+                backgroundColor: COLORS.surface.card,
+                backgroundGradientFrom: COLORS.surface.card,
+                backgroundGradientTo: COLORS.surface.card,
+                decimalPlaces: 2,
+                color: (opacity = 1) => COLORS.primary,
+                labelColor: (opacity = 1) => COLORS.text.muted,
+                propsForDots: { r: '2', strokeWidth: '1', stroke: COLORS.primary },
+                propsForBackgroundLines: { stroke: COLORS.surface.secondary },
+              }}
+              bezier
+              style={{ marginBottom: 0, borderRadius: 8 }}
+            />
+            <Text style={{ color: COLORS.text.muted, fontSize: 13, textAlign: 'center', marginTop: 2, marginBottom: 12 }}>Date</Text>
+          </View>
+        ) : (
+          <Text style={{ color: COLORS.text.muted, fontSize: 14, marginBottom: 12 }}>[No data]</Text>
+        )}
+        {/* Deposits Chart */}
+        <Text style={{ color: COLORS.text.muted, fontWeight: '600', marginBottom: 2 }}>Deposits</Text>
+        {analytics.chartData && analytics.chartData.dailyDeposits.length > 0 ? (
+          <View>
+            <LineChart
+              data={{
+                labels: analytics.chartData.dayLabels,
+                datasets: [
+                  { data: analytics.chartData.dailyDeposits, color: () => COLORS.secondary, strokeWidth: 2 },
+                ],
+              }}
+              width={Dimensions.get('window').width - 56}
+              height={120}
+              chartConfig={{
+                backgroundColor: COLORS.surface.card,
+                backgroundGradientFrom: COLORS.surface.card,
+                backgroundGradientTo: COLORS.surface.card,
+                decimalPlaces: 2,
+                color: (opacity = 1) => COLORS.secondary,
+                labelColor: (opacity = 1) => COLORS.text.muted,
+                propsForDots: { r: '2', strokeWidth: '1', stroke: COLORS.secondary },
+                propsForBackgroundLines: { stroke: COLORS.surface.secondary },
+              }}
+              bezier
+              style={{ marginBottom: 0, borderRadius: 8 }}
+            />
+            <Text style={{ color: COLORS.text.muted, fontSize: 13, textAlign: 'center', marginTop: 2, marginBottom: 4 }}>Date</Text>
+          </View>
+        ) : (
+          <Text style={{ color: COLORS.text.muted, fontSize: 14 }}>[No data]</Text>
         )}
       </View>
 
-      {/* Daily Redemptions */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Daily Redemptions (Amount Spent)</Text>
-        {analytics.dailyRedemptions.map((day, index) => (
-          <View key={index} style={styles.revenueRow}>
-            <Text style={styles.dateText}>{day.date}</Text>
-            <Text style={styles.amountText}>${day.amount.toFixed(2)}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Top Items */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Top Selling Items</Text>
-        {analytics.topItems.map((item, index) => (
-          <View key={index} style={styles.itemRow}>
-            <Text style={styles.itemName}>{item.name}</Text>
-            <Text style={styles.itemCount}>{item.order_count} orders</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Customer Metrics */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Customer Insights</Text>
-        <View style={[styles.metricsGrid, { justifyContent: 'flex-start' }]}>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>{analytics.customerMetrics.totalCustomers || 0}</Text>
-            <Text style={styles.metricLabel}>Total Customers</Text>
-          </View>
-          <View style={[styles.metricCard, { marginRight: 0 }]}>
-            <Text style={styles.metricValue}>${analytics.customerMetrics.averageRedemptionValue.toFixed(2)}</Text>
-            <Text style={styles.metricLabel}>Avg. Spend</Text>
-          </View>
-          <View style={[styles.metricCard, { marginRight: 0 }]}>
-            <Text style={styles.metricValue}>{analytics.customerMetrics.repeatCustomers}</Text>
-            <Text style={styles.metricLabel}>Repeat Customers</Text>
-          </View>
+      {/* Top Performing Items (Redemptions) */}
+      <View style={[styles.section, { marginHorizontal: 16, marginBottom: 16, backgroundColor: COLORS.surface.card }]}> 
+        <Text style={{ color: COLORS.text.white, fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>Top Performing Items (Redemptions)</Text>
+        <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingBottom: 6, marginBottom: 6 }}>
+          <Text style={[styles.metricLabel, { flex: 2 }]}>Item</Text>
+          <Text style={[styles.metricLabel, { flex: 1, textAlign: 'right' }]}>Redempd</Text>
+          <Text style={[styles.metricLabel, { flex: 1, textAlign: 'right' }]}>Uses</Text>
+          <Text style={[styles.metricLabel, { flex: 1, textAlign: 'right' }]}>Avg Deposit</Text>
+          <Text style={[styles.metricLabel, { flex: 1, textAlign: 'right' }]}>Revenue</Text>
         </View>
+        {analytics.topItems.map((item, idx) => (
+          <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: COLORS.surface.secondary }}>
+            <Text style={{ color: COLORS.text.white, flex: 2 }}>{item.name}</Text>
+            <Text style={{ color: COLORS.text.muted, flex: 1, textAlign: 'right' }}>{item.redempd}</Text>
+            <Text style={{ color: COLORS.text.muted, flex: 1, textAlign: 'right' }}>{item.uses}</Text>
+            <Text style={{ color: COLORS.text.muted, flex: 1, textAlign: 'right' }}>${item.price.toFixed(2)}</Text>
+            <Text style={{ color: COLORS.text.muted, flex: 1, textAlign: 'right' }}>${item.revenue.toFixed(2)}</Text>
+          </View>
+        ))}
       </View>
 
-      {/* Time Metrics */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Time Analysis (Redemptions)</Text>
-        <View style={styles.metricsGrid}>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>{analytics.timeMetrics.busiestHour || 'N/A'}</Text>
+      {/* Time Analytics */}
+      <View style={[styles.section, { marginHorizontal: 16, marginBottom: 32, backgroundColor: COLORS.surface.card }]}> 
+        <Text style={{ color: COLORS.text.muted, fontWeight: 'bold', fontSize: 15, marginBottom: 8 }}>Time Analytics</Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+          <View style={{ width: '32%', marginBottom: 8, alignItems: 'center' }}>
             <Text style={styles.metricLabel}>Busiest Hour</Text>
+            <Text style={styles.metricValue}>{analytics.timeMetrics.busiestHour}</Text>
           </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>{analytics.timeMetrics.busiestDay || 'N/A'}</Text>
+          <View style={{ width: '32%', marginBottom: 8, alignItems: 'center' }}>
             <Text style={styles.metricLabel}>Busiest Day</Text>
+            <Text style={styles.metricValue}>{analytics.timeMetrics.busiestDay}</Text>
           </View>
-          <View style={styles.metricCard}>
-            <Text style={styles.metricValue}>${analytics.timeMetrics.averageRedemptionValue.toFixed(2)}</Text>
+          <View style={{ width: '32%', marginBottom: 8, alignItems: 'center' }}>
             <Text style={styles.metricLabel}>Avg. Order Value</Text>
+            <Text style={styles.metricValue}>${analytics.timeMetrics.averageRedemptionValue.toFixed(2)}</Text>
           </View>
         </View>
       </View>
