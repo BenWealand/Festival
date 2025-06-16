@@ -3,6 +3,7 @@ import { Alert, StyleSheet, View, Text, TouchableOpacity, TextInput } from 'reac
 import { supabase } from '../lib/supabase'
 import { Button, Input } from '@rneui/themed'
 import { COLORS } from '../constants/theme'
+import { SafeAreaView } from 'react-native-safe-area-context'
 
 export default function Auth() {
   const [email, setEmail] = useState('')
@@ -130,57 +131,59 @@ export default function Auth() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>{isSignUp ? 'Sign Up' : 'Sign In'}</Text>
-      
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        placeholderTextColor="#666"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        placeholderTextColor="#666"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-      {isSignUp && (
-        <>
-          <TextInput
-            style={styles.input}
-            placeholder="Confirm Password"
-            placeholderTextColor="#666"
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            secureTextEntry
-          />
-          {renderPasswordRequirements()}
-        </>
-      )}
-      <TouchableOpacity 
-        style={styles.button} 
-        onPress={() => isSignUp ? signUpWithEmail() : signInWithEmail()} 
-        disabled={loading}
-      >
-        <Text style={styles.buttonText}>
-          {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
-        </Text>
-      </TouchableOpacity>
-      
-      <TouchableOpacity 
-        style={styles.switchButton} 
-        onPress={() => setIsSignUp(!isSignUp)}
-      >
-        <Text style={styles.switchText}>
-          {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
-        </Text>
-      </TouchableOpacity>
-    </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.surface.primary }}>
+      <View style={styles.container}>
+        <Text style={styles.title}>{isSignUp ? 'Sign Up' : 'Sign In'}</Text>
+        
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
+          placeholderTextColor="#666"
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+        />
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
+          placeholderTextColor="#666"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+        />
+        {isSignUp && (
+          <>
+            <TextInput
+              style={styles.input}
+              placeholder="Confirm Password"
+              placeholderTextColor="#666"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+            />
+            {renderPasswordRequirements()}
+          </>
+        )}
+        <TouchableOpacity 
+          style={styles.button} 
+          onPress={() => isSignUp ? signUpWithEmail() : signInWithEmail()} 
+          disabled={loading}
+        >
+          <Text style={styles.buttonText}>
+            {loading ? 'Loading...' : isSignUp ? 'Sign Up' : 'Sign In'}
+          </Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.switchButton} 
+          onPress={() => setIsSignUp(!isSignUp)}
+        >
+          <Text style={styles.switchText}>
+            {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
   )
 }
 
@@ -189,7 +192,6 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     padding: 20,
-    backgroundColor: COLORS.surface.primary,
   },
   title: {
     fontSize: 24,

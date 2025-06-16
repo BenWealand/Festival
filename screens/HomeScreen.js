@@ -12,6 +12,16 @@ import { withTiming } from 'react-native-reanimated';
 import ChipSVG from '../assets/chip.svg';
 import Svg, { Defs, RadialGradient, LinearGradient as SvgLinearGradient, Rect, Stop, Path } from 'react-native-svg';
 import { BlurView } from 'expo-blur';
+import BlueGradient from '../assets/gradients/blue_gradient.svg';
+import BlueTealGradient from '../assets/gradients/blue_teal_gradient.svg';
+import GoldenOrangeGradient from '../assets/gradients/golden_orange_gradient.svg';
+import LavenderPinkGradient from '../assets/gradients/lavender_pink_gradient.svg';
+import OrangeRedGradient from '../assets/gradients/orange_red_gradient.svg';
+import PeachPinkPurpleGradient from '../assets/gradients/peach_pink_purple_gradient.svg';
+import PinkPurpleGradient from '../assets/gradients/pink_purple_gradient.svg';
+import PurpleGradient from '../assets/gradients/purple_gradient.svg';
+import TealBlueGradient from '../assets/gradients/teal_blue_gradient.svg';
+import ShadowPng from '../assets/shadow.png';
 // import { PanGestureHandler } from 'react-native-gesture-handler';
 
 const shadowBoxStyle = {
@@ -73,6 +83,32 @@ const COMING_SOON_RADIALS = [
   { cx: '30%', cy: '30%', r: '70%', color: '#000', opacity: 0.22 },
   { cx: '70%', cy: '70%', r: '60%', color: '#000', opacity: 0.18 },
   { cx: '50%', cy: '50%', r: '120%', color: '#6B2B5B', opacity: 0.28 }, // dark purple accent
+];
+
+// Gradient color sets for each card (from user table)
+const gradientColorSets = [
+  ['#71efea', '#d5c5ad', '#5ae5e8', '#98f5ee'],
+  ['#bbc700', '#abb656', '#2bb83a', '#98f5ee'],
+  ['#0044fb', '#eabda8', '#30451d'],
+  ['#2fc0ff', '#0e3497', '#f97523', '#ab25c3'],
+  ['#e647f4', '#11748e', '#1b1f99', '#8df29a'],
+  ['#2dee11', '#744e29', '#b7bb64', '#bbdb8d'],
+  ['#c990e0', '#f07f7a', '#20e3ad'],
+  ['#e1e5fd', '#d5fc1e', '#a6228d', '#d2143c'],
+  ['#00d371', '#18ab81', '#93f609'],
+  ['#0db0e0', '#06d5ba', '#bd8836'],
+];
+
+const gradientComponents = [
+  BlueGradient,
+  BlueTealGradient,
+  GoldenOrangeGradient,
+  LavenderPinkGradient,
+  OrangeRedGradient,
+  PeachPinkPurpleGradient,
+  PinkPurpleGradient,
+  PurpleGradient,
+  TealBlueGradient,
 ];
 
 // CardStack for Apple Wallet-style UI
@@ -177,6 +213,7 @@ function CardStack({ data, onCardPress }) {
               shadowBoxStyle={shadowBoxStyle}
               COLORS={COLORS}
               totalCards={reversedData.length}
+              isBottomCard={index === reversedData.length - 1}
             />
             {/* Expanded card details immediately below the expanded card */}
             {expandedIndex === index && !item.isComingSoon && (
@@ -281,8 +318,8 @@ function CardStack({ data, onCardPress }) {
   );
 }
 
-// Update CardItem to use passed shared values
-const CardItem = memo(({ item, index, expandedIndex, setExpandedIndex, expandedLoading, setExpandedLoading, expandedError, setExpandedError, expandedTransactions, setExpandedTransactions, fetchRecentTransactions, top, scale, opacity, slideY, detailsOpacity, CARD_HEADER_HEIGHT, CARD_BORDER_RADIUS, CARD_MARGIN, CARD_HEIGHT, CARD_SOLID_COLORS, CARD_RADIALS, COMING_SOON_COLOR, COMING_SOON_RADIALS, shadowBoxStyle, COLORS, totalCards }) => {
+// Update CardItem to use only the new gradient logic
+const CardItem = memo(({ item, index, expandedIndex, setExpandedIndex, expandedLoading, setExpandedLoading, expandedError, setExpandedError, expandedTransactions, setExpandedTransactions, fetchRecentTransactions, top, scale, opacity, slideY, detailsOpacity, CARD_HEADER_HEIGHT, CARD_BORDER_RADIUS, CARD_MARGIN, CARD_HEIGHT, shadowBoxStyle, COLORS, totalCards, isBottomCard }) => {
   const animatedStyle = useAnimatedStyle(() => {
     const isExpanded = expandedIndex === index;
     return {
@@ -306,10 +343,11 @@ const CardItem = memo(({ item, index, expandedIndex, setExpandedIndex, expandedL
   const isExpanded = expandedIndex === index;
   const isAnyExpanded = expandedIndex !== null;
 
-  // Get the color for this card
-  const currentCardColor = (CARD_SOLID_COLORS && CARD_SOLID_COLORS.length > 0)
-    ? CARD_SOLID_COLORS[index % CARD_SOLID_COLORS.length]
-    : '#1CA9C9';
+  // Pick a gradient SVG for this card
+  const GradientComponent = gradientComponents[index % gradientComponents.length];
+
+  // Show shadow unless this is the bottom card or the card is expanded
+  const showShadow = !isBottomCard && !isExpanded;
 
   return (
     <Animated.View
@@ -322,33 +360,40 @@ const CardItem = memo(({ item, index, expandedIndex, setExpandedIndex, expandedL
           borderColor: COLORS.border,
           marginBottom: CARD_MARGIN,
           marginHorizontal: CARD_MARGIN,
-          backgroundColor: COLORS.surface.card,
           overflow: 'hidden',
         },
         animatedStyle,
       ]}
     >
-      <View style={{
-        position: 'absolute',
-        width: '100%',
-        height: '100%',
-        borderRadius: CARD_BORDER_RADIUS,
-        top: 0,
-        left: 0,
-        backgroundColor: item.isComingSoon ? COMING_SOON_COLOR : currentCardColor,
-      }} />
-      <BlurView
-        intensity={60}
+      {/* SVG gradient as the only background */}
+      <View
         style={{
           position: 'absolute',
           width: '100%',
           height: '100%',
           borderRadius: CARD_BORDER_RADIUS,
-          top: 0,
-          left: 0,
           overflow: 'hidden',
         }}
-      />
+      >
+        <GradientComponent width="100%" height="100%" />
+      </View>
+      {/* Card shadow (PNG) from card above (softer, wider, lighter) */}
+      {showShadow && (
+        <Image
+          source={ShadowPng}
+          resizeMode="stretch"
+          style={{
+            position: 'absolute',
+            top: CARD_HEIGHT * 0.22,
+            left: 5,
+            right: 0,
+            height: 40,
+            borderRadius: 32,
+            zIndex: 20,
+            opacity: .6,
+          }}
+        />
+      )}
       <TouchableOpacity
         style={{ flex: 1, borderRadius: CARD_BORDER_RADIUS }}
         activeOpacity={0.95}
@@ -404,6 +449,16 @@ const CardItem = memo(({ item, index, expandedIndex, setExpandedIndex, expandedL
             </>
           )}
         </View>
+        {/* Gloss Effect (white-to-transparent linear gradient at the top, now inside Touchable) */}
+        <Svg width="100%" height="40" style={{ position: 'absolute', top: 0, left: 0, zIndex: 10, pointerEvents: 'none' }}>
+          <Defs>
+            <SvgLinearGradient id={`gloss-gradient-${index}`} x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0%" stopColor="#fff" stopOpacity="0.45" />
+              <Stop offset="100%" stopColor="#fff" stopOpacity="0.0" />
+            </SvgLinearGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100%" height="40" rx={CARD_BORDER_RADIUS} fill={`url(#gloss-gradient-${index})`} />
+        </Svg>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -704,8 +759,8 @@ export default function HomeScreen() {
             />
             <QuickAction 
               icon="users" 
-              title="Customers" 
-              onPress={() => navigation.navigate('Customers')}
+              title="Employee Tips"
+              onPress={() => navigation.navigate('EmployeeTips')}
             />
             <QuickAction 
               icon="bar-chart" 
