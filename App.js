@@ -1,6 +1,6 @@
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, Platform, Linking } from 'react-native';
+import { View, StyleSheet, ActivityIndicator, Text, TouchableOpacity, Platform, Linking, Modal, Button } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createStackNavigator } from '@react-navigation/stack';
@@ -12,6 +12,7 @@ import { StripeProvider } from '@stripe/stripe-react-native';
 import Constants from 'expo-constants';
 import Auth from './components/Auth';
 import { StatusBar } from 'expo-status-bar';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Import screens
 import HomeScreen from './screens/HomeScreen';
@@ -36,6 +37,8 @@ import GlobalTransactionsScreen from './screens/GlobalTransactionsScreen';
 import ActiveOrdersScreen from './screens/ActiveOrdersScreen';
 import ScrollableTabBar from './components/ScrollableTabBar';
 import EmployeeTipsScreen from './screens/EmployeeTipsScreen';
+import AllDepositsScreen from './screens/AllDepositsScreen';
+import AllRedemptionsScreen from './screens/AllRedemptionsScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -46,15 +49,15 @@ const BUSINESS_TABS = [
   { name: 'Customers', component: CustomersScreen, icon: 'users', label: 'Customers' },
   { name: 'ActiveOrders', component: ActiveOrdersScreen, icon: 'shopping-basket', label: 'Active Orders' },
   { name: 'Analytics', component: AnalyticsScreen, icon: 'bar-chart', label: 'Analytics' },
+  { name: 'AllDeposits', component: AllDepositsScreen, icon: 'bank', label: 'All Deposits' },
+  { name: 'AllRedemptions', component: AllRedemptionsScreen, icon: 'history', label: 'All Redemptions' },
   { name: 'EmployeeTips', component: EmployeeTipsScreen, icon: 'money', label: 'Tips' },
-  { name: 'Settings', component: SettingsScreen, icon: 'cog', label: 'Settings' },
 ];
 
 const USER_TABS = [
   { name: 'Home', component: HomeScreen, icon: 'home', label: 'Home' },
   { name: 'Balance', component: BalanceScreen, icon: 'money', label: 'Balance' },
   { name: 'GlobalTransactions', component: GlobalTransactionsScreen, icon: 'exchange', label: 'Transactions' },
-  { name: 'Settings', component: SettingsScreen, icon: 'cog', label: 'Settings' },
 ];
 
 function MainTabs({ isOwner }) {
@@ -104,9 +107,10 @@ function MainTabs({ isOwner }) {
 }
 
 export default function App() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, profile } = useAuth();
   const [isOwner, setIsOwner] = React.useState(null); // null = loading, true/false = loaded
   const [ownerLoading, setOwnerLoading] = React.useState(true);
+  const [showPrelistModal, setShowPrelistModal] = React.useState(false);
 
   React.useEffect(() => {
     const checkOwner = async () => {
@@ -130,6 +134,20 @@ export default function App() {
     };
     checkOwner();
   }, [user]);
+
+  React.useEffect(() => {
+    const checkPrelistModal = async () => {
+      if (user && profile?.on_prelist) {
+        const modalKey = `prelistModalShown_${user.id}`;
+        const alreadyShown = await AsyncStorage.getItem(modalKey);
+        if (!alreadyShown) {
+          setShowPrelistModal(true);
+          await AsyncStorage.setItem(modalKey, 'true');
+        }
+      }
+    };
+    checkPrelistModal();
+  }, [user, profile]);
 
   if (authLoading || ownerLoading || isOwner === null) {
     return (
@@ -170,12 +188,34 @@ export default function App() {
               <Stack.Screen name="LocationMenu" component={LocationMenuScreen} />
               <Stack.Screen name="LocationTransactions" component={LocationTransactionsScreen} />
               <Stack.Screen name="MenuItemDetail" component={MenuItemDetailScreen} />
+              <Stack.Screen name="CustomerDetails" component={CustomerDetailsScreen} />
               <Stack.Screen name="Profile" component={ProfileScreen} />
               <Stack.Screen name="Inbox" component={InboxScreen} />
               <Stack.Screen name="NotificationSettings" component={NotificationSettingsScreen} />
+              <Stack.Screen name="AllDeposits" component={AllDepositsScreen} />
+              <Stack.Screen name="AllRedemptions" component={AllRedemptionsScreen} />
             </Stack.Navigator>
           )}
         </NavigationContainer>
+        <Modal visible={showPrelistModal} transparent animationType="slide">
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#00000099' }}>
+            <View style={{ backgroundColor: COLORS.surface.primary, padding: 24, borderRadius: 12, alignItems: 'center', width: '90%' }}>
+              <Text style={{ fontSize: 22, fontWeight: 'bold', marginBottom: 16, color: COLORS.primary, textAlign: 'center' }}>Welcome Prelist Member!</Text>
+              <Text style={{ marginBottom: 20, color: COLORS.text.white, textAlign: 'center' }}>
+                Thanks for signing up for the prelist, we've been waiting for your arrival.\n\nPlease take this for your support:
+              </Text>
+              <View style={{ marginBottom: 24 }}>
+                <Text style={{ fontWeight: 'bold', fontSize: 20, color: COLORS.primary }}>[Reward Placeholder]</Text>
+              </View>
+              <TouchableOpacity
+                style={{ backgroundColor: COLORS.primary, paddingVertical: 10, paddingHorizontal: 32, borderRadius: 6 }}
+                onPress={() => setShowPrelistModal(false)}
+              >
+                <Text style={{ color: COLORS.text.white, fontWeight: 'bold', fontSize: 16 }}>CLOSE</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </StripeProvider>
     </GestureHandlerRootView>
   );

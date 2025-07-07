@@ -1,13 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, ActivityIndicator, Alert, TextInput, Modal } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
-import { COLORS } from '../constants/theme';
+import { COLORS, BACKGROUND_BASE } from '../constants/theme';
 import { supabase } from '../lib/supabase';
 import { createPaymentIntentForLocation } from '../lib/stripe';
 import { useStripe } from '@stripe/stripe-react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import Constants from 'expo-constants';
+import GlassCard from '../components/GlassCard';
+import { StatusBar } from 'expo-status-bar';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import GlowingButton from '../components/GlowingButton';
 
 export default function BalanceScreen() {
   const navigation = useNavigation();
@@ -191,7 +196,7 @@ export default function BalanceScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.surface.primary }}>
+    <View style={{ flex: 1, backgroundColor: BACKGROUND_BASE }}>
       <View style={styles.header}>
         <TouchableOpacity 
           style={styles.backButton}

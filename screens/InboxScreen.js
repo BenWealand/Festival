@@ -1,9 +1,17 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Modal, ScrollView, ActivityIndicator } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { COLORS } from '../constants/theme';
+import { COLORS, BACKGROUND_BASE } from '../constants/theme';
+import { GLASS_GRADIENT_COLORS } from '../constants/theme';
 import { useNavigation } from '@react-navigation/native';
+import GlassCard from '../components/GlassCard';
+import GlowingButton from '../components/GlowingButton';
+import { StatusBar } from 'expo-status-bar';
+import Svg, { Defs, RadialGradient, Rect, Stop, LinearGradient } from 'react-native-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import BackgroundGradient from '../components/BackgroundGradient';
+import MeteorBackground from '../components/MeteorBackground';
 
 // Sample data - replace with actual data from your backend
 const sampleMessages = [
@@ -69,6 +77,7 @@ export default function InboxScreen() {
   const [messages, setMessages] = useState(sampleMessages);
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const formatTimestamp = (timestamp) => {
     const date = new Date(timestamp);
@@ -103,28 +112,32 @@ export default function InboxScreen() {
   };
 
   const renderMessage = ({ item }) => (
-    <TouchableOpacity 
-      style={[styles.messageItem, item.unread && styles.unreadMessage]}
-      onPress={() => handleMessagePress(item)}
-    >
-      <View style={styles.messageContent}>
-        <View style={styles.messageHeader}>
-          <Text style={[styles.sender, item.unread && styles.unreadText]}>
-            {item.sender}
+    <GlassCard style={{ marginBottom: 10 }} borderRadius={16}>
+      <TouchableOpacity 
+        style={[item.unread && styles.unreadMessage]}
+        onPress={() => handleMessagePress(item)}
+      >
+        <View style={styles.messageContent}>
+          <View style={styles.messageHeader}>
+            <Text style={[styles.sender, item.unread && styles.unreadText]}>
+              {item.sender}
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.timestamp}>
+                {formatTimestamp(item.timestamp)}
+              </Text>
+              {item.unread && <View style={styles.unreadDot} />}
+            </View>
+          </View>
+          <Text style={[styles.subject, item.unread && styles.unreadText]}>
+            {item.subject}
           </Text>
-          <Text style={styles.timestamp}>
-            {formatTimestamp(item.timestamp)}
+          <Text style={styles.preview} numberOfLines={2}>
+            {item.preview}
           </Text>
         </View>
-        <Text style={[styles.subject, item.unread && styles.unreadText]}>
-          {item.subject}
-        </Text>
-        <Text style={styles.preview} numberOfLines={2}>
-          {item.preview}
-        </Text>
-      </View>
-      {item.unread && <View style={styles.unreadDot} />}
-    </TouchableOpacity>
+      </TouchableOpacity>
+    </GlassCard>
   );
 
   const renderCategory = ({ item }) => (
@@ -138,7 +151,7 @@ export default function InboxScreen() {
       <FontAwesome 
         name={item.icon} 
         size={20} 
-        color={selectedCategory === item.id ? '#fff' : '#666'} 
+        color={selectedCategory === item.id ? '#fff' : COLORS.primary} 
       />
       <Text style={[
         styles.categoryText,
@@ -154,10 +167,19 @@ export default function InboxScreen() {
       visible={isModalVisible}
       transparent={true}
       animationType="fade"
+      statusBarTranslucent={true}
       onRequestClose={() => setIsModalVisible(false)}
     >
-      <BlurView intensity={20} style={styles.modalOverlay}>
-        <View style={styles.modalContent}>
+      <View style={styles.modalOverlay}>
+        <View style={{
+          position: 'absolute',
+          width: '90%',
+          maxHeight: '80%',
+          backgroundColor: BACKGROUND_BASE,
+          borderRadius: 18,
+          zIndex: 0,
+        }} />
+        <GlassCard style={styles.modalContent} borderRadius={18}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalSender}>{selectedMessage?.sender}</Text>
             <TouchableOpacity 
@@ -180,55 +202,91 @@ export default function InboxScreen() {
               Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
             </Text>
           </ScrollView>
-        </View>
-      </BlurView>
+        </GlassCard>
+      </View>
+      <StatusBar style="light" backgroundColor="transparent" translucent={true} />
     </Modal>
   );
 
+  // GradientTopBar component for the top section
+  const GradientTopBar = ({ children, style }) => {
+    // Use the same color order as GlassCard, but fixed order for consistency
+    const colorOrder = [
+      GLASS_GRADIENT_COLORS.primary,
+      GLASS_GRADIENT_COLORS.secondary,
+      GLASS_GRADIENT_COLORS.tertiary,
+    ];
+    return (
+      <View style={[{ width: '100%', overflow: 'hidden', paddingVertical: 10 }, style]}>
+        <Svg height="100%" width="100%" style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Defs>
+            <LinearGradient id="topbar-linear" x1="0" y1="0" x2="1" y2="1">
+              <Stop offset="0%" stopColor={colorOrder[0]} stopOpacity={0.7} />
+              <Stop offset="50%" stopColor={colorOrder[1]} stopOpacity={0.7} />
+              <Stop offset="100%" stopColor={colorOrder[2]} stopOpacity={0.7} />
+            </LinearGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100%" height="100%" fill="url(#topbar-linear)" />
+        </Svg>
+        <View style={{ position: 'relative', zIndex: 1 }}>{children}</View>
+      </View>
+    );
+  };
+
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.surface.primary }}>
-      {/* Custom Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface.secondary, paddingTop: 36, paddingBottom: 12, paddingHorizontal: 16 }}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 16 }}>
-          <FontAwesome name="arrow-left" size={26} color={COLORS.primary} />
-        </TouchableOpacity>
-        <Text style={{ color: COLORS.text.white, fontSize: 22, fontWeight: 'bold', flex: 1 }}>Inbox</Text>
-      </View>
+    <BackgroundGradient>
+      <MeteorBackground />
       <View style={styles.container}>
-        <View style={styles.categoriesContainer}>
-          <FlatList
-            horizontal
-            data={categories}
-            renderItem={renderCategory}
-            keyExtractor={item => item.id}
-            showsHorizontalScrollIndicator={false}
-            style={styles.categoriesList}
-          />
+        <View style={{ position: 'relative', flex: 1 }}>
+          {/* GradientTopBar absolutely fills the top, behind header, tabs, and glass cards */}
+          <GradientTopBar style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 186, zIndex: 0 }}>
+            {/* Empty, gradient only */}
+          </GradientTopBar>
+          {/* Custom Header */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingTop: 36, paddingBottom: 12, paddingHorizontal: 16, backgroundColor: 'transparent', zIndex: 1, marginTop: 24 }}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 16 }}>
+              <FontAwesome name="arrow-left" size={26} color={COLORS.primary} />
+            </TouchableOpacity>
+            <Text style={{ color: COLORS.text.white, fontSize: 22, fontWeight: 'bold', flex: 1 }}>Inbox</Text>
+          </View>
+          <View style={[styles.container, { zIndex: 1 }]}> 
+            {/* Tabs on top of gradient */}
+            <View>
+              <View style={styles.categoriesContainer}>
+                <FlatList
+                  horizontal
+                  data={categories}
+                  renderItem={renderCategory}
+                  keyExtractor={item => item.id}
+                  showsHorizontalScrollIndicator={false}
+                  style={styles.categoriesList}
+                />
+              </View>
+            </View>
+            <FlatList
+              data={filteredMessages}
+              renderItem={renderMessage}
+              keyExtractor={item => item.id}
+              contentContainerStyle={[styles.messagesList, { marginTop: 18 }]}
+            />
+            {renderMessageModal()}
+          </View>
         </View>
-
-        <FlatList
-          data={filteredMessages}
-          renderItem={renderMessage}
-          keyExtractor={item => item.id}
-          contentContainerStyle={styles.messagesList}
-        />
-
-        {renderMessageModal()}
       </View>
-    </View>
+    </BackgroundGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface.primary,
+    backgroundColor: 'transparent',
   },
   categoriesContainer: {
-    backgroundColor: COLORS.surface.card,
+    backgroundColor: 'transparent',
     paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomWidth: 0,
+    borderBottomColor: 'transparent',
   },
   categoriesList: {
     paddingHorizontal: 10,
@@ -240,7 +298,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginHorizontal: 5,
     borderRadius: 20,
-    backgroundColor: COLORS.surface.secondary,
+    backgroundColor: BACKGROUND_BASE,
   },
   selectedCategory: {
     backgroundColor: COLORS.primary,
@@ -258,21 +316,20 @@ const styles = StyleSheet.create({
   },
   messageItem: {
     flexDirection: 'row',
-    backgroundColor: COLORS.surface.card,
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 10,
-    shadowColor: '#000',
+    padding: 0,
+    borderRadius: 0,
+    marginBottom: 0,
+    shadowColor: 'transparent',
     shadowOffset: {
       width: 0,
-      height: 2,
+      height: 0,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
   },
   unreadMessage: {
-    backgroundColor: COLORS.surface.secondary,
+    backgroundColor: 'transparent',
   },
   messageContent: {
     flex: 1,
@@ -313,28 +370,23 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: COLORS.primary,
-    marginLeft: 10,
-    alignSelf: 'center',
+    marginLeft: 8,
+    marginTop: 1,
   },
   modalOverlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   modalContent: {
-    backgroundColor: COLORS.surface.card,
     borderRadius: 15,
     padding: 20,
     width: '90%',
     maxHeight: '80%',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    backgroundColor: 'transparent',
+    shadowColor: 'transparent',
+    elevation: 0,
   },
   modalHeader: {
     flexDirection: 'row',

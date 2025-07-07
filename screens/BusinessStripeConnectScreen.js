@@ -4,6 +4,12 @@ import { supabase } from '../lib/supabase';
 import { COLORS } from '../constants/theme';
 import Constants from 'expo-constants';
 import { useAuth } from '../context/AuthContext';
+import GlassCard from '../components/GlassCard';
+import GlowingButton from '../components/GlowingButton';
+import { StatusBar } from 'expo-status-bar';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { BACKGROUND_BASE } from '../constants/theme';
 
 // Use environment variable directly
 const STRIPE_CLIENT_ID = Constants.expoConfig.extra.stripeClientId;
@@ -198,7 +204,7 @@ export default function BusinessStripeConnectScreen({ route, navigation }) {
   // Show loading indicator while checking connection status
   if (checkStatusLoading) {
     return (
-      <View style={styles.container}>
+      <View style={{ flex: 1, backgroundColor: BACKGROUND_BASE }}>
         <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>Checking connection status...</Text>
       </View>
@@ -208,7 +214,7 @@ export default function BusinessStripeConnectScreen({ route, navigation }) {
   // Render different UI based on connection status
   if (isConnected) {
     return (
-      <View style={styles.container}>
+      <View style={{ flex: 1, backgroundColor: BACKGROUND_BASE }}>
         <Text style={styles.title}>Stripe Connected!</Text>
         <Text style={styles.description}>
           Your business is successfully connected to Stripe.
@@ -224,7 +230,7 @@ export default function BusinessStripeConnectScreen({ route, navigation }) {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={{ flex: 1, backgroundColor: BACKGROUND_BASE }}>
       <Text style={styles.title}>Connect with Stripe</Text>
       <Text style={styles.description}>
         Securely connect your business to Stripe to enable payments and transfers.

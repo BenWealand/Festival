@@ -4,6 +4,11 @@ import { COLORS } from '../constants/theme';
 import { FontAwesome } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase'; // Assuming supabase client is available
 import { useAuth } from '../context/AuthContext'; // Assuming auth context is available
+import GlassCard from '../components/GlassCard';
+import GlowingButton from '../components/GlowingButton';
+import { StatusBar } from 'expo-status-bar';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function MenuItemDetailScreen({ item, locationId, addToCart, setCurrentScreen }) {
   return (

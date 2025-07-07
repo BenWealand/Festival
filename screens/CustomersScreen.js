@@ -1,22 +1,28 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  ActivityIndicator,
-  TouchableOpacity
-} from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity } from 'react-native';
 import { supabase } from '../lib/supabase';
-import { COLORS } from '../constants/theme';
+import { COLORS, BACKGROUND_BASE, BACKGROUND_RADIAL } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { FontAwesome } from '@expo/vector-icons';
+import GlassCard from '../components/GlassCard';
+import { StatusBar } from 'expo-status-bar';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import BackgroundGradient from '../components/BackgroundGradient';
+import MeteorBackground from '../components/MeteorBackground';
 
 export default function CustomersScreen({ navigation }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [customers, setCustomers] = useState([]);
+  const [contentHeight, setContentHeight] = useState(0);
+
+  // Radial gradients for background
+  const radialGradients = useMemo(() => [
+    { id: 'cust-bg-1', cx: '30%', cy: '30%', rx: '60%', ry: '60%' },
+    { id: 'cust-bg-2', cx: '70%', cy: '70%', rx: '70%', ry: '70%' },
+  ], []);
 
   useEffect(() => {
     fetchCustomers();
@@ -25,6 +31,7 @@ export default function CustomersScreen({ navigation }) {
   const fetchCustomers = async () => {
     try {
       setLoading(true);
+      setError(null);
       
       // Get location ID for the owner
       const { data: location, error: locationError } = await supabase
@@ -49,6 +56,8 @@ export default function CustomersScreen({ navigation }) {
 
       if (customerError) throw customerError;
 
+      console.log('Raw transaction data:', customerData?.slice(0, 3)); // Debug log
+
       // Get unique customer names from transactions
       const customerNames = [...new Set(customerData.map(t => t.customer_name))];
 
@@ -57,21 +66,16 @@ export default function CustomersScreen({ navigation }) {
       const emails = customerNames.filter(name => !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(name));
 
       // Fetch profiles for UUIDs
-      const { data: uuidProfiles, error: uuidError } = await supabase
+      const { data: uuidProfiles } = await supabase
         .from('profiles')
         .select('id, full_name')
         .in('id', uuids);
 
       // Fetch profiles for emails
-      const { data: emailProfiles, error: emailError } = await supabase
+      const { data: emailProfiles } = await supabase
         .from('profiles')
         .select('email, full_name')
         .in('email', emails);
-
-      if (uuidError || emailError) {
-        console.error('Error fetching profiles:', uuidError || emailError);
-        // Continue without profiles if there's an error
-      }
 
       // Combine profiles
       const profiles = [...(uuidProfiles || []), ...(emailProfiles || [])];
@@ -80,13 +84,14 @@ export default function CustomersScreen({ navigation }) {
       const customerMap = new Map();
       customerData.forEach(transaction => {
         if (!customerMap.has(transaction.customer_name)) {
-          const profile = profiles?.find(p => 
+          const profile = profiles?.find(p =>
             p.id === transaction.customer_name || p.email === transaction.customer_name
           );
           customerMap.set(transaction.customer_name, {
             id: transaction.customer_name,
             name: profile?.full_name || transaction.customer_name,
-            totalSpent: 0,
+            totalDeposited: 0,
+            totalRedeemed: 0,
             lastVisit: null,
             transactionCount: 0,
             transactions: []
@@ -94,9 +99,15 @@ export default function CustomersScreen({ navigation }) {
         }
         
         const customer = customerMap.get(transaction.customer_name);
-        customer.totalSpent += transaction.amount;
         customer.transactionCount++;
         customer.transactions.push(transaction);
+        
+        // Separate deposits and redemptions based on actual status values
+        if (transaction.status === 'complete' || transaction.status === 'completed') {
+          customer.totalDeposited += transaction.amount;
+        } else if (transaction.status === 'redeemed') {
+          customer.totalRedeemed += transaction.amount;
+        }
         
         const transactionDate = new Date(transaction.created_at);
         if (!customer.lastVisit || transactionDate > customer.lastVisit) {
@@ -104,10 +115,11 @@ export default function CustomersScreen({ navigation }) {
         }
       });
 
-      // Convert to array and sort by total spent
+      // Convert to array and sort by total deposited
       const sortedCustomers = Array.from(customerMap.values())
-        .sort((a, b) => b.totalSpent - a.totalSpent);
+        .sort((a, b) => b.totalDeposited - a.totalDeposited);
 
+      console.log('Processed customers:', sortedCustomers.slice(0, 2)); // Debug log
       setCustomers(sortedCustomers);
     } catch (err) {
       console.error('Error fetching customers:', err);
@@ -149,59 +161,82 @@ export default function CustomersScreen({ navigation }) {
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Customer List</Text>
-        <Text style={styles.headerSubtitle}>{customers.length} total customers</Text>
-      </View>
-
-      {customers.map((customer, index) => (
-        <TouchableOpacity 
-          key={index}
-          style={styles.customerCard}
-          onPress={() => {
-            if (customer && customer.id) {
-              navigation.navigate('CustomerDetails', { 
-                customer: {
-                  ...customer,
-                  transactions: customer.transactions || []
-                }
-              });
-            }
-          }}
-        >
-          <View style={styles.customerHeader}>
-            <View style={styles.customerInfo}>
-              <Text style={styles.customerName}>{customer.name}</Text>
-              <Text style={styles.customerMeta}>
-                {customer.transactionCount} {customer.transactionCount === 1 ? 'visit' : 'visits'}
-              </Text>
+    <BackgroundGradient>
+      <MeteorBackground />
+      <View style={styles.container}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }}>
+          <StatusBar style="light" backgroundColor="transparent" translucent={true} />
+          <ScrollView style={{ flex: 1 }} onContentSizeChange={(w, h) => setContentHeight(h)}>
+            <View style={{ padding: 16 }}>
+              <GlassCard style={{ marginBottom: 16 }} borderRadius={16}>
+                <Text style={styles.title}>All Customers</Text>
+                <Text style={styles.subtitle}>{customers.length} customers with deposit & redemption history</Text>
+                {customers.length === 0 && (
+                  <Text style={styles.emptyText}>No customers found.</Text>
+                )}
+                {customers.map((customer, index) => (
+                  <TouchableOpacity
+                    key={customer.id}
+                    style={[
+                      styles.customerRow,
+                      index < customers.length - 1 && styles.customerRowBorder
+                    ]}
+                    activeOpacity={0.7}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    onPress={() => {
+                      console.log('Touch detected! Attempting to navigate to CustomerDetails with customer:', customer.id);
+                      if (customer && customer.id) {
+                        try {
+                          navigation.navigate('CustomerDetails', {
+                            customer: {
+                              ...customer,
+                              lastVisit: customer.lastVisit ? customer.lastVisit.toISOString() : null,
+                              transactions: customer.transactions || []
+                            }
+                          });
+                        } catch (navError) {
+                          console.error('Navigation error:', navError);
+                          // Fallback: try to navigate to a different screen or show an alert
+                          alert('Unable to open customer details. Please try again.');
+                        }
+                      }
+                    }}
+                  >
+                    <View style={styles.customerInfo}>
+                      <Text style={styles.customerName}>{customer.name}</Text>
+                      <Text style={styles.customerMeta}>
+                        {customer.transactionCount} {customer.transactionCount === 1 ? 'transaction' : 'transactions'}
+                      </Text>
+                    </View>
+                    <View style={styles.customerStats}>
+                      <View style={styles.amountRow}>
+                        <Text style={styles.amountLabel}>Deposited:</Text>
+                        <Text style={[styles.depositedAmount, { color: '#fff' }]}>{formatAmount(customer.totalDeposited)}</Text>
+                      </View>
+                      <View style={styles.amountRow}>
+                        <Text style={styles.amountLabel}>Redeemed:</Text>
+                        <Text style={[styles.redeemedAmount, { color: '#fff' }]}>-{formatAmount(customer.totalRedeemed)}</Text>
+                      </View>
+                      <Text style={styles.lastVisit}>Last: {formatDate(customer.lastVisit)}</Text>
+                    </View>
+                    <FontAwesome name="chevron-right" size={16} color={COLORS.text.muted} style={{ marginLeft: 8 }} />
+                  </TouchableOpacity>
+                ))}
+              </GlassCard>
             </View>
-            <Text style={styles.customerAmount}>{formatAmount(customer.totalSpent)}</Text>
-          </View>
-          
-          <View style={styles.customerFooter}>
-            <Text style={styles.lastVisit}>
-              Last visit: {formatDate(customer.lastVisit)}
-            </Text>
-            <FontAwesome name="chevron-right" size={16} color={COLORS.text.muted} />
-          </View>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
+          </ScrollView>
+        </SafeAreaView>
+      </View>
+    </BackgroundGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.surface.primary,
-  },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.surface.primary,
+    backgroundColor: BACKGROUND_BASE,
   },
   loadingText: {
     marginTop: 10,
@@ -212,12 +247,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: BACKGROUND_BASE,
     padding: 20,
-    backgroundColor: COLORS.surface.primary,
   },
   errorText: {
     color: COLORS.error,
-    fontSize: 16,
+    margin: 10,
     textAlign: 'center',
   },
   retryButton: {
@@ -230,61 +265,79 @@ const styles = StyleSheet.create({
     color: COLORS.text.white,
     fontSize: 16,
   },
-  header: {
-    padding: 16,
-    backgroundColor: COLORS.surface.card,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+  title: {
     color: COLORS.text.white,
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 4,
   },
-  headerSubtitle: {
-    fontSize: 16,
-    color: COLORS.text.muted,
-    marginTop: 4,
+  subtitle: {
+    color: COLORS.text.white,
+    opacity: 0.7,
+    marginBottom: 16,
   },
-  customerCard: {
-    backgroundColor: COLORS.surface.card,
-    marginHorizontal: 16,
-    marginVertical: 8,
-    padding: 16,
-    borderRadius: 12,
+  emptyText: {
+    color: COLORS.text.white,
+    opacity: 0.7,
+    textAlign: 'center',
+    marginTop: 32,
   },
-  customerHeader: {
+  customerRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    paddingVertical: 14,
+  },
+  customerRowBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.18)',
   },
   customerInfo: {
-    flex: 1,
+    flex: 2,
   },
   customerName: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: '500',
     color: COLORS.text.white,
+    marginBottom: 2,
   },
   customerMeta: {
     fontSize: 14,
-    color: COLORS.text.muted,
-    marginTop: 4,
+    color: COLORS.text.white,
+    opacity: 0.7,
   },
-  customerAmount: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  customerStats: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 2,
+  },
+  amountLabel: {
+    fontSize: 14,
+    color: COLORS.text.white,
+    opacity: 0.7,
+    marginRight: 4,
+  },
+  depositedAmount: {
+    fontSize: 16,
+    fontWeight: '600',
     color: COLORS.primary,
   },
-  customerFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
+  redeemedAmount: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.secondary,
   },
   lastVisit: {
-    fontSize: 14,
-    color: COLORS.text.muted,
+    fontSize: 13,
+    color: COLORS.text.white,
+    opacity: 0.7,
+    marginTop: 2,
+  },
+  container: {
+    flex: 1,
+    backgroundColor: BACKGROUND_BASE,
   },
 }); 

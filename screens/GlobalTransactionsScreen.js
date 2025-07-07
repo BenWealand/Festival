@@ -5,6 +5,10 @@ import { COLORS } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { FontAwesome } from '@expo/vector-icons';
+import GlassCard from '../components/GlassCard';
+import { StatusBar } from 'expo-status-bar';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function GlobalTransactionsScreen({ navigation, route }) {
   const { user } = useAuth();

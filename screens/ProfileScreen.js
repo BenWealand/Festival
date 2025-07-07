@@ -1,10 +1,17 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ActivityIndicator, ScrollView, Switch } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useNavigation } from '@react-navigation/native';
-import { COLORS } from '../constants/theme';
+import { COLORS, BACKGROUND_BASE, BACKGROUND_RADIAL } from '../constants/theme';
 import { FontAwesome } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import nameBlacklist from '../nameBlacklist.json';
+import { StatusBar } from 'expo-status-bar';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import GlassCard from '../components/GlassCard';
+import BackgroundGradient from '../components/BackgroundGradient';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import MeteorBackground from '../components/MeteorBackground';
 
 // Blacklist of inappropriate words/phrases (imported from JSON)
 function containsBlacklistedWord(str) {
@@ -13,8 +20,10 @@ function containsBlacklistedWord(str) {
   return nameBlacklist.some(word => lower.includes(word));
 }
 
-export default function ProfileScreen() {
+export default function ProfileScreen(props) {
   const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
+  const [activeTab, setActiveTab] = useState('profile'); // 'profile', 'rewards', 'notifications', 'help'
   const [username, setUsername] = useState('');
   const [firstName, setFirstName] = useState('');
   const [middleName, setMiddleName] = useState('');
@@ -25,6 +34,19 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [contentHeight, setContentHeight] = useState(0);
+  const radialGradients = useMemo(() => [
+    { id: 'profile-bg-1', cx: '30%', cy: '30%', rx: '60%', ry: '60%' },
+    { id: 'profile-bg-2', cx: '70%', cy: '70%', rx: '70%', ry: '70%' },
+  ], []);
+  const [notifications, setNotifications] = useState(true);
+  const [pushNotifications, setPushNotifications] = useState(true);
+  const [smsNotifications, setSmsNotifications] = useState(true);
+  const [emailNotifications, setEmailNotifications] = useState(true);
+  const [transactionNotifications, setTransactionNotifications] = useState(true);
+  const [rewardNotifications, setRewardNotifications] = useState(true);
+  const [eventNotifications, setEventNotifications] = useState(true);
+  const [appUpdateNotifications, setAppUpdateNotifications] = useState(true);
 
   useEffect(() => {
     fetchProfile();
@@ -205,7 +227,7 @@ export default function ProfileScreen() {
 
   async function handleLogout() {
     Alert.alert(
-      'Confirm Logout',
+      'Logout',
       'Are you sure you want to logout?',
       [
         {
@@ -217,17 +239,11 @@ export default function ProfileScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              console.log('Attempting to logout...');
               const { error } = await supabase.auth.signOut();
-              if (error) {
-                console.error('Logout error:', error);
-                throw error;
-              }
-              console.log('Logout successful');
-              // No navigation needed; App will show Auth screen automatically
+              if (error) throw error;
             } catch (error) {
-              console.error('Logout error:', error);
-              Alert.alert('Error', error.message);
+              console.error('Error logging out:', error);
+              Alert.alert('Error', 'Failed to logout. Please try again.');
             }
           },
         },
@@ -235,145 +251,413 @@ export default function ProfileScreen() {
     );
   }
 
+  // Tab bar component
+  const renderTabBar = () => (
+    <View
+      style={{
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(255,255,255,0.12)',
+        marginBottom: 16,
+        backgroundColor: 'transparent',
+      }}
+    >
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'flex-start',
+        }}
+      >
+        {[
+          { key: 'profile', label: 'Profile' },
+          { key: 'rewards', label: 'Rewards' },
+          { key: 'notifications', label: 'Notification Settings' },
+          { key: 'help', label: 'Help & Policies' },
+        ].map(tab => (
+          <TouchableOpacity
+            key={tab.key}
+            style={{
+              paddingVertical: 10,
+              paddingHorizontal: 12,
+              borderBottomWidth: 3,
+              borderBottomColor: activeTab === tab.key ? COLORS.primary : 'transparent',
+              alignItems: 'center',
+              backgroundColor: 'transparent',
+              marginRight: 4,
+            }}
+            onPress={() => setActiveTab(tab.key)}
+          >
+            <Text
+              style={{
+                color: COLORS.text.white,
+                fontWeight: activeTab === tab.key ? 'bold' : '600',
+                fontSize: 14,
+                textAlign: 'center',
+                minWidth: 60,
+              }}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+
+  // Tab content
+  const renderTabContent = () => {
+    if (activeTab === 'profile') {
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.text.white} />
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: BACKGROUND_BASE }}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
   }
+  return (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 32 }}>
+          <GlassCard style={{ margin: 16 }} borderRadius={16}>
+            <Text style={styles.sectionTitle}>Personal Information</Text>
+            
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Username</Text>
+              <TextInput
+                style={[styles.input, fieldErrors.username && styles.inputError]}
+                value={username}
+                onChangeText={setUsername}
+                placeholder="Enter username"
+                placeholderTextColor="rgba(255,255,255,0.7)"
+              />
+              {fieldErrors.username && <Text style={styles.errorText}>{fieldErrors.username}</Text>}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>First Name</Text>
+              <TextInput
+                style={[styles.input, fieldErrors.firstName && styles.inputError]}
+                value={firstName}
+                onChangeText={setFirstName}
+                placeholder="Enter first name"
+                placeholderTextColor="rgba(255,255,255,0.7)"
+              />
+              {fieldErrors.firstName && <Text style={styles.errorText}>{fieldErrors.firstName}</Text>}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Middle Name (Optional)</Text>
+              <TextInput
+                style={[styles.input, fieldErrors.middleName && styles.inputError]}
+                value={middleName}
+                onChangeText={setMiddleName}
+                placeholder="Enter middle name"
+                placeholderTextColor="rgba(255,255,255,0.7)"
+              />
+              {fieldErrors.middleName && <Text style={styles.errorText}>{fieldErrors.middleName}</Text>}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Last Name</Text>
+              <TextInput
+                style={[styles.input, fieldErrors.lastName && styles.inputError]}
+                value={lastName}
+                onChangeText={setLastName}
+                placeholder="Enter last name"
+                placeholderTextColor="rgba(255,255,255,0.7)"
+              />
+              {fieldErrors.lastName && <Text style={styles.errorText}>{fieldErrors.lastName}</Text>}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Suffix (Optional)</Text>
+              <TextInput
+                style={[styles.input, fieldErrors.suffix && styles.inputError]}
+                value={suffix}
+                onChangeText={setSuffix}
+                placeholder="e.g., Jr., Sr., III"
+                placeholderTextColor="rgba(255,255,255,0.7)"
+              />
+              {fieldErrors.suffix && <Text style={styles.errorText}>{fieldErrors.suffix}</Text>}
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Phone Number</Text>
+              <View style={styles.phoneInputContainer}>
+                <TextInput
+                  style={[styles.phoneCountryCode, fieldErrors.phoneNumber && styles.inputError]}
+                  value={countryCode}
+                  onChangeText={setCountryCode}
+                  placeholder="+1"
+                  placeholderTextColor="rgba(255,255,255,0.7)"
+                />
+                <TextInput
+                  style={[styles.phoneNumber, fieldErrors.phoneNumber && styles.inputError]}
+                  value={phoneNumber}
+                  onChangeText={setPhoneNumber}
+                  placeholder="Enter phone number"
+                  placeholderTextColor="rgba(255,255,255,0.7)"
+                  keyboardType="phone-pad"
+                />
+              </View>
+              {fieldErrors.phoneNumber && <Text style={styles.errorText}>{fieldErrors.phoneNumber}</Text>}
+            </View>
+
+            <TouchableOpacity
+              onPress={updateProfile}
+              style={{
+                backgroundColor: BACKGROUND_RADIAL,
+                borderRadius: 12,
+                paddingVertical: 16,
+                alignItems: 'center',
+                marginVertical: 16,
+                width: '100%',
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Save</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleLogout}
+              style={{
+                backgroundColor: COLORS.error,
+                borderRadius: 12,
+                paddingVertical: 16,
+                alignItems: 'center',
+                marginBottom: 8,
+                width: '100%',
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18 }}>Log Off</Text>
+            </TouchableOpacity>
+          </GlassCard>
+        </ScrollView>
+      );
+    }
+    if (activeTab === 'rewards') {
+      return (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <Text style={{ color: COLORS.text.white, fontSize: 18, fontWeight: 'bold' }}>Rewards</Text>
+          <Text style={{ color: COLORS.text.white, marginTop: 12 }}>Your rewards and loyalty information will appear here.</Text>
+        </View>
+      );
+    }
+    if (activeTab === 'notifications') {
+      const sectionStyle = {
+        backgroundColor: BACKGROUND_RADIAL + 'cc',
+        borderRadius: 14,
+        padding: 16,
+        marginBottom: 18,
+        marginTop: 2,
+      };
+      const itemStyle = {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 8,
+      };
+      const checkColor = COLORS.primary;
+      const labelStyle = { color: '#fff', fontSize: 15, marginLeft: 10, fontWeight: '500' };
+      const sectionHeaderStyle = { color: '#fff', fontWeight: 'bold', fontSize: 16, flex: 1 };
+      return (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+          <GlassCard style={{ padding: 0 }} borderRadius={18}>
+            <View style={{ padding: 20, opacity: 1 }}>
+              {/* Master toggle */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 18 }}>
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 18, flex: 1 }}>Enable Notifications</Text>
+                <Switch
+                  value={notifications}
+                  onValueChange={value => {
+                    setNotifications(value);
+                  }}
+                  trackColor={{ false: '#767577', true: COLORS.primary }}
+                  thumbColor={notifications ? COLORS.primary : '#f4f3f4'}
+                />
+              </View>
+              {/* Push, SMS, Email toggles */}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22, opacity: notifications ? 1 : 0.5 }}>
+                <View style={{ alignItems: 'center', flex: 1 }}>
+                  <Text style={{ color: '#fff', fontSize: 14, marginBottom: 4 }}>Push</Text>
+                  <Switch
+                    value={pushNotifications}
+                    onValueChange={setPushNotifications}
+                    disabled={!notifications}
+                    trackColor={{ false: '#767577', true: COLORS.primary }}
+                    thumbColor={pushNotifications ? COLORS.primary : '#f4f3f4'}
+                  />
+                </View>
+                <View style={{ alignItems: 'center', flex: 1 }}>
+                  <Text style={{ color: '#fff', fontSize: 14, marginBottom: 4 }}>SMS</Text>
+                  <Switch
+                    value={smsNotifications}
+                    onValueChange={setSmsNotifications}
+                    disabled={!notifications}
+                    trackColor={{ false: '#767577', true: COLORS.primary }}
+                    thumbColor={smsNotifications ? COLORS.primary : '#f4f3f4'}
+                  />
+                </View>
+                <View style={{ alignItems: 'center', flex: 1 }}>
+                  <Text style={{ color: '#fff', fontSize: 14, marginBottom: 4 }}>Email</Text>
+                  <Switch
+                    value={emailNotifications}
+                    onValueChange={setEmailNotifications}
+                    disabled={!notifications}
+                    trackColor={{ false: '#767577', true: COLORS.primary }}
+                    thumbColor={emailNotifications ? COLORS.primary : '#f4f3f4'}
+                  />
+                </View>
+              </View>
+              {/* Transaction Notifications */}
+              <View style={[sectionStyle, { opacity: notifications ? 1 : 0.5 }]}> 
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={sectionHeaderStyle}>Transaction Notifications</Text>
+                  <Switch
+                    value={transactionNotifications}
+                    onValueChange={setTransactionNotifications}
+                    disabled={!notifications}
+                    trackColor={{ false: '#767577', true: COLORS.primary }}
+                    thumbColor={transactionNotifications ? COLORS.primary : '#f4f3f4'}
+                  />
+                </View>
+                <View style={itemStyle}><FontAwesome name="check-circle" size={18} color={checkColor} /><Text style={labelStyle}>Deposit Confirmations</Text></View>
+                <View style={itemStyle}><FontAwesome name="check-circle" size={18} color={checkColor} /><Text style={labelStyle}>Balance Updates</Text></View>
+                <View style={itemStyle}><FontAwesome name="check-circle" size={18} color={checkColor} /><Text style={labelStyle}>Purchase Receipts</Text></View>
+                <View style={itemStyle}><FontAwesome name="check-circle" size={18} color={checkColor} /><Text style={labelStyle}>Refunds / Failed Transactions</Text></View>
+              </View>
+              {/* Cashback & Rewards */}
+              <View style={[sectionStyle, { opacity: notifications ? 1 : 0.5 }]}> 
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={sectionHeaderStyle}>Cashback & Rewards</Text>
+                  <Switch
+                    value={rewardNotifications}
+                    onValueChange={setRewardNotifications}
+                    disabled={!notifications}
+                    trackColor={{ false: '#767577', true: COLORS.primary }}
+                    thumbColor={rewardNotifications ? COLORS.primary : '#f4f3f4'}
+                  />
+                </View>
+                <View style={itemStyle}><FontAwesome name="check-circle" size={18} color={checkColor} /><Text style={labelStyle}>New Cashback Earned</Text></View>
+                <View style={itemStyle}><FontAwesome name="check-circle" size={18} color={checkColor} /><Text style={labelStyle}>Milestone Rewards</Text></View>
+                <View style={itemStyle}><FontAwesome name="check-circle" size={18} color={checkColor} /><Text style={labelStyle}>Streaks / Bonuses Ending Soon</Text></View>
+              </View>
+              {/* Bar Activity & Events */}
+              <View style={[sectionStyle, { opacity: notifications ? 1 : 0.5 }]}> 
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={sectionHeaderStyle}>Bar Activity & Events</Text>
+                  <Switch
+                    value={eventNotifications}
+                    onValueChange={setEventNotifications}
+                    disabled={!notifications}
+                    trackColor={{ false: '#767577', true: COLORS.primary }}
+                    thumbColor={eventNotifications ? COLORS.primary : '#f4f3f4'}
+                  />
+                </View>
+                <View style={itemStyle}><FontAwesome name="check-circle" size={18} color={checkColor} /><Text style={labelStyle}>Special Events or Parties</Text></View>
+                <View style={itemStyle}><FontAwesome name="check-circle" size={18} color={checkColor} /><Text style={labelStyle}>Happy Hour Reminders</Text></View>
+                <View style={itemStyle}><FontAwesome name="check-circle" size={18} color={checkColor} /><Text style={labelStyle}>Line Status / Entry Deals</Text></View>
+                <View style={itemStyle}><FontAwesome name="check-circle" size={18} color={checkColor} /><Text style={labelStyle}>Bar Reopening Alerts</Text></View>
+              </View>
+              {/* App Updates & Announcements */}
+              <View style={[sectionStyle, { opacity: notifications ? 1 : 0.5 }]}> 
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={sectionHeaderStyle}>App Updates & Announcements</Text>
+                  <Switch
+                    value={appUpdateNotifications}
+                    onValueChange={setAppUpdateNotifications}
+                    disabled={!notifications}
+                    trackColor={{ false: '#767577', true: COLORS.primary }}
+                    thumbColor={appUpdateNotifications ? COLORS.primary : '#f4f3f4'}
+                  />
+                </View>
+                <View style={itemStyle}><FontAwesome name="check-circle" size={18} color={checkColor} /><Text style={labelStyle}>Feature Drops</Text></View>
+                <View style={itemStyle}><FontAwesome name="check-circle" size={18} color={checkColor} /><Text style={labelStyle}>Policy Changes / Terms Updates</Text></View>
+                <View style={itemStyle}><FontAwesome name="check-circle" size={18} color={checkColor} /><Text style={labelStyle}>Bug Fix Announcements</Text></View>
+              </View>
+            </View>
+          </GlassCard>
+        </ScrollView>
+      );
+    }
+    if (activeTab === 'help') {
+      return (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <Text style={{ color: COLORS.text.white, fontSize: 18, fontWeight: 'bold' }}>Help & Policies</Text>
+          <Text style={{ color: COLORS.text.white, marginTop: 12 }}>Find help and read our policies here.</Text>
+        </View>
+      );
+    }
+    return null;
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: COLORS.surface.primary }}>
-      {/* Custom Header */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.surface.secondary, paddingTop: 36, paddingBottom: 12, paddingHorizontal: 16 }}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={{ paddingRight: 16 }}>
-          <FontAwesome name="arrow-left" size={26} color={COLORS.primary} />
-        </TouchableOpacity>
-        <Text style={{ color: COLORS.text.white, fontSize: 22, fontWeight: 'bold', flex: 1 }}>Profile</Text>
-      </View>
+    <BackgroundGradient>
+      <MeteorBackground />
       <View style={styles.container}>
-        <View style={styles.section}>
-          <Text style={styles.label}>Username</Text>
-          <TextInput
-            style={[styles.input, fieldErrors.username && styles.inputError]}
-            placeholder="Username"
-            placeholderTextColor="rgba(255, 255, 255, 0.5)"
-            value={username}
-            onChangeText={setUsername}
-            autoCapitalize="none"
-          />
-          {fieldErrors.username && <Text style={styles.errorText}>{fieldErrors.username}</Text>}
-
-          <Text style={styles.label}>First Name</Text>
-          <TextInput
-            style={[styles.input, fieldErrors.firstName && styles.inputError]}
-            placeholder="First Name"
-            placeholderTextColor="rgba(255, 255, 255, 0.5)"
-            value={firstName}
-            onChangeText={setFirstName}
-            autoCapitalize="words"
-          />
-          {fieldErrors.firstName && <Text style={styles.errorText}>{fieldErrors.firstName}</Text>}
-
-          <Text style={styles.label}>Middle Name</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Middle Name"
-            placeholderTextColor="rgba(255, 255, 255, 0.5)"
-            value={middleName}
-            onChangeText={setMiddleName}
-            autoCapitalize="words"
-          />
-
-          <Text style={styles.label}>Last Name</Text>
-          <TextInput
-            style={[styles.input, fieldErrors.lastName && styles.inputError]}
-            placeholder="Last Name"
-            placeholderTextColor="rgba(255, 255, 255, 0.5)"
-            value={lastName}
-            onChangeText={setLastName}
-            autoCapitalize="words"
-          />
-          {fieldErrors.lastName && <Text style={styles.errorText}>{fieldErrors.lastName}</Text>}
-
-          <Text style={styles.label}>Suffix</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Suffix (Jr., Sr., III, etc.)"
-            placeholderTextColor="rgba(255, 255, 255, 0.5)"
-            value={suffix}
-            onChangeText={setSuffix}
-            autoCapitalize="words"
-          />
-
-          <Text style={styles.label}>Phone Number</Text>
-          <View style={styles.phoneContainer}>
-            <TextInput
-              style={[styles.input, styles.countryCode]}
-              placeholder="+1"
-              placeholderTextColor="rgba(255, 255, 255, 0.5)"
-              value={countryCode}
-              onChangeText={(text) => {
-                // Ensure country code starts with +
-                const formattedText = text.startsWith('+') ? text : `+${text}`;
-                setCountryCode(formattedText);
-              }}
-              keyboardType="phone-pad"
-              autoCapitalize="none"
-            />
-            <TextInput
-              style={[styles.input, styles.phoneNumber, fieldErrors.phoneNumber && styles.inputError]}
-              placeholder="Phone Number"
-              placeholderTextColor="rgba(255, 255, 255, 0.5)"
-              value={phoneNumber}
-              onChangeText={setPhoneNumber}
-              keyboardType="phone-pad"
-              autoCapitalize="none"
-            />
+        <SafeAreaView style={{ flex: 1 }} edges={['left', 'right', 'bottom', 'top']}>
+          <StatusBar style="light" backgroundColor="transparent" translucent={true} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: 'transparent' }}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={{ marginRight: 16, padding: 8 }}>
+              <FontAwesome name="arrow-left" size={20} color={COLORS.text.white} />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.text.white }}>Profile</Text>
           </View>
-          {fieldErrors.phoneNumber && <Text style={styles.errorText}>{fieldErrors.phoneNumber}</Text>}
-        </View>
-
-        <TouchableOpacity 
-          style={[styles.button, saving && styles.buttonDisabled]}
-          onPress={updateProfile}
-          disabled={saving}
-        >
-          {saving ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Save Changes</Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity 
-          style={[styles.button, styles.logoutButton]}
-          onPress={handleLogout}
-        >
-          <Text style={styles.buttonText}>Logout</Text>
-        </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            {renderTabBar()}
+            {renderTabContent()}
+          </View>
+        </SafeAreaView>
       </View>
-    </View>
+    </BackgroundGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface.primary,
-    padding: 16,
+    paddingHorizontal: 16,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  section: {
-    backgroundColor: COLORS.surface.card,
-    borderRadius: 8,
+  loadingText: {
+    color: COLORS.text.white,
+    fontSize: 16,
+    fontWeight: '600',
+    marginTop: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 16,
-    marginBottom: 20,
+    paddingTop: 24,
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    color: COLORS.text.white,
+    fontSize: 22,
+    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+  },
+  placeholder: {
+    width: 40,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.text.white,
+    marginBottom: 16,
+  },
+  inputGroup: {
+    marginBottom: 16,
   },
   label: {
     fontSize: 16,
@@ -382,50 +666,61 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   input: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 8,
     padding: 12,
-    fontSize: 16,
-    marginBottom: 16,
     color: COLORS.text.white,
-    backgroundColor: COLORS.surface.secondary,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
-  phoneContainer: {
+  phoneInputContainer: {
     flexDirection: 'row',
     gap: 8,
   },
-  countryCode: {
+  phoneCountryCode: {
     width: 80,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 8,
+    padding: 12,
+    color: COLORS.text.white,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   phoneNumber: {
     flex: 1,
-  },
-  button: {
-    backgroundColor: COLORS.primary,
-    padding: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 8,
-    alignItems: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
+    padding: 12,
     color: COLORS.text.white,
     fontSize: 16,
-    fontWeight: '600',
-  },
-  logoutButton: {
-    backgroundColor: '#FF0000',
-    marginTop: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
   },
   inputError: {
     borderColor: COLORS.error,
-    borderWidth: 1,
   },
   errorText: {
     color: COLORS.error,
-    fontSize: 12,
+    fontSize: 14,
     marginTop: 4,
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    flexWrap: 'wrap',
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  logoutText: {
+    color: COLORS.error,
+    fontSize: 16,
+    fontWeight: '600',
+    marginLeft: 8,
   },
 }); 

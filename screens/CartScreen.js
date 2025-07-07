@@ -1,9 +1,14 @@
 import React, { useState } from 'react';
 import { View, Text, Modal, TouchableOpacity, TextInput, ActivityIndicator, Alert, ScrollView } from 'react-native';
-import { COLORS } from '../constants/theme';
+import { COLORS, BACKGROUND_BASE } from '../constants/theme';
 import Constants from 'expo-constants';
 import { YOUR_BACKEND_API_URL } from '@env';
 import { useAuth } from '../context/AuthContext';
+import GlassCard from '../components/GlassCard';
+import GlowingButton from '../components/GlowingButton';
+import { StatusBar } from 'expo-status-bar';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const TIP_PRESETS = [10, 15, 20, 25];
 
@@ -71,7 +76,7 @@ export default function CartScreen({ visible, onClose, cart, setCart, locationId
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: COLORS.surface.primary, padding: 20 }}>
+      <View style={{ flex: 1, backgroundColor: BACKGROUND_BASE }}>
         <Text style={{ fontSize: 24, fontWeight: 'bold', color: COLORS.text.white, marginBottom: 16 }}>Your Order</Text>
         <ScrollView style={{ flex: 1 }}>
           {cart.map(item => (

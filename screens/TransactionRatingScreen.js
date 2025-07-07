@@ -4,6 +4,11 @@ import { FontAwesome } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 import { COLORS } from '../constants/theme';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import GlassCard from '../components/GlassCard';
+import GlowingButton from '../components/GlowingButton';
+import { StatusBar } from 'expo-status-bar';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function TransactionRatingScreen({ route, navigation }) {
   const { transactionId, transaction } = route.params || {};

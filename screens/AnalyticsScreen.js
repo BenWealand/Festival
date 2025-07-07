@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -11,10 +11,21 @@ import {
   Dimensions,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
-import { COLORS } from '../constants/theme';
+import { COLORS, BACKGROUND_BASE, BACKGROUND_RADIAL } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { startOfDay, startOfWeek, startOfMonth, subMonths, subYears } from 'date-fns';
 import { LineChart } from 'react-native-chart-kit';
+import GlassCard from '../components/GlassCard';
+import { StatusBar } from 'expo-status-bar';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import GlowingButton from '../components/GlowingButton';
+import BackgroundGradient from '../components/BackgroundGradient';
+import MeteorBackground from '../components/MeteorBackground';
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
 
 export default function AnalyticsScreen() {
   const { user } = useAuth();
@@ -61,6 +72,27 @@ export default function AnalyticsScreen() {
     { label: '6 Month', value: '6month' },
     { label: 'Year', value: 'year' },
   ];
+
+  // Add contentHeight state and radialGradients like other screens
+  const [contentHeight, setContentHeight] = useState(0);
+
+  // Generate two random radial gradient positions
+  const radialGradients = useMemo(() => [
+    {
+      id: 'bg-radial-1',
+      cx: `${Math.floor(Math.random() * 80) + 10}%`,
+      cy: `${Math.floor(Math.random() * 80) + 10}%`,
+      rx: '60%',
+      ry: '60%',
+    },
+    {
+      id: 'bg-radial-2',
+      cx: `${Math.floor(Math.random() * 80) + 10}%`,
+      cy: `${Math.floor(Math.random() * 80) + 10}%`,
+      rx: '70%',
+      ry: '70%',
+    },
+  ], []);
 
   useEffect(() => {
     fetchAnalytics();
@@ -130,39 +162,54 @@ export default function AnalyticsScreen() {
         .select('*')
         .eq('location_id', locationId);
       if (allTransactionsError) throw allTransactionsError;
-      // Fetch transaction_items for top items
-      const { data: transactionItems, error: transactionItemsError } = await supabase
-        .from('transaction_items')
-        .select('menu_item_id, quantity, price_at_time, created_at, transaction_id')
-        .in('transaction_id', transactions.map(t => t.id));
-      if (transactionItemsError) throw transactionItemsError;
-      // Fetch menu_items for names
-      const { data: menuItems, error: menuItemsError } = await supabase
-        .from('menu_items')
-        .select('id, name, price');
-      if (menuItemsError) throw menuItemsError;
+      
+      // Ensure arrays are not undefined
+      const safeDeposits = deposits || [];
+      const safeAllDeposits = allDeposits || [];
+      const safeTransactions = transactions || [];
+      const safeAllTransactions = allTransactions || [];
+      
+      // Fetch transaction_items for top items (only if we have transactions)
+      let transactionItems = [];
+      let menuItems = [];
+      if (safeTransactions.length > 0) {
+        const { data: transactionItemsData, error: transactionItemsError } = await supabase
+          .from('transaction_items')
+          .select('menu_item_id, quantity, price_at_time, created_at, transaction_id')
+          .in('transaction_id', safeTransactions.map(t => t.id));
+        if (transactionItemsError) throw transactionItemsError;
+        transactionItems = transactionItemsData || [];
+        
+        // Fetch menu_items for names
+        const { data: menuItemsData, error: menuItemsError } = await supabase
+          .from('menu_items')
+          .select('id, name, price');
+        if (menuItemsError) throw menuItemsError;
+        menuItems = menuItemsData || [];
+      }
+      
       // --- Calculate stats ---
       // Total Deposits
-      const totalDeposits = deposits.reduce((sum, d) => sum + (d.amount || 0), 0);
+      const totalDeposits = safeDeposits.reduce((sum, d) => sum + (d.amount || 0), 0);
       // Amount Redeemed (sum of redemption amounts)
-      const amountRedeemed = transactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+      const amountRedeemed = safeTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
       // Total Redemptions (count)
-      const totalRedemptions = transactions.length;
+      const totalRedemptions = safeTransactions.length;
       // Left to Redeem (deposits - amount redeemed)
       const leftToRedeem = totalDeposits - amountRedeemed;
       // New/Returning Users
       const userFirstDeposit = {};
-      allDeposits.forEach(d => {
+      safeAllDeposits.forEach(d => {
         if (!userFirstDeposit[d.user_id] || new Date(d.created_at) < new Date(userFirstDeposit[d.user_id])) {
           userFirstDeposit[d.user_id] = d.created_at;
         }
       });
-      const usersInRange = new Set(deposits.map(d => d.user_id));
+      const usersInRange = new Set(safeDeposits.map(d => d.user_id));
       let newUsers = 0;
       let returningUsers = 0;
       usersInRange.forEach(userId => {
         const firstDeposit = userFirstDeposit[userId];
-        if (firstDeposit && new Date(firstDeposit) >= rangeStart) {
+        if (firstDeposit && rangeStart && new Date(firstDeposit) >= rangeStart) {
           newUsers++;
         } else {
           returningUsers++;
@@ -171,24 +218,24 @@ export default function AnalyticsScreen() {
       const returningUsersPercent = usersInRange.size > 0 ? Math.round((returningUsers / usersInRange.size) * 100) : 0;
       // Customer Metrics
       // totalCustomers: unique depositors (all time)
-      const allDepositorIds = allDeposits.map(d => d.user_id);
+      const allDepositorIds = safeAllDeposits.map(d => d.user_id);
       const uniqueDepositors = Array.from(new Set(allDepositorIds));
       // repeatCustomers: users with >1 deposit (all time)
       const depositCounts = {};
       allDepositorIds.forEach(id => { depositCounts[id] = (depositCounts[id] || 0) + 1; });
       const repeatCustomers = Object.values(depositCounts).filter(count => count > 1).length;
       // averageRedemptionValue: average transaction amount in range
-      const averageRedemptionValue = transactions.length > 0 ? transactions.reduce((sum, t) => sum + (t.amount || 0), 0) / transactions.length / 100 : 0;
+      const averageRedemptionValue = safeTransactions.length > 0 ? safeTransactions.reduce((sum, t) => sum + (t.amount || 0), 0) / safeTransactions.length / 100 : 0;
       // Top Items
       const itemMap = {};
       transactionItems.forEach(ti => {
         if (!itemMap[ti.menu_item_id]) {
           itemMap[ti.menu_item_id] = { uses: 0, redempd: 0, revenue: 0, price: 0 };
         }
-        itemMap[ti.menu_item_id].uses += ti.quantity;
+        itemMap[ti.menu_item_id].uses += ti.quantity || 0;
         itemMap[ti.menu_item_id].redempd++;
-        itemMap[ti.menu_item_id].revenue += ti.price_at_time * ti.quantity;
-        itemMap[ti.menu_item_id].price = ti.price_at_time / 100;
+        itemMap[ti.menu_item_id].revenue += (ti.price_at_time || 0) * (ti.quantity || 0);
+        itemMap[ti.menu_item_id].price = (ti.price_at_time || 0) / 100;
       });
       const topItems = Object.entries(itemMap).map(([id, data]) => {
         const menuItem = menuItems.find(m => m.id === id);
@@ -202,13 +249,13 @@ export default function AnalyticsScreen() {
       }).sort((a, b) => b.order_count - a.order_count).slice(0, 5);
       // Graph Data (daily revenue breakdown)
       // (Placeholder: just return all transactions in range for now)
-      const graphData = allTransactions.filter(t => new Date(t.created_at) >= rangeStart);
+      const graphData = safeAllTransactions.filter(t => !rangeStart || new Date(t.created_at) >= rangeStart);
       // Time Metrics
       // busiestHour, busiestDay, averageRedemptionValue (for selected range)
       const hourlyCounts = Array(24).fill(0);
       const dailyCounts = Array(7).fill(0);
       let totalAmount = 0;
-      transactions.forEach(t => {
+      safeTransactions.forEach(t => {
         const date = new Date(t.created_at);
         hourlyCounts[date.getHours()]++;
         dailyCounts[date.getDay()]++;
@@ -219,14 +266,14 @@ export default function AnalyticsScreen() {
       const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
       const busiestHour = busiestHourIdx >= 0 ? `${busiestHourIdx}:00` : 'N/A';
       const busiestDay = busiestDayIdx >= 0 ? dayNames[busiestDayIdx] : 'N/A';
-      const avgRedemptionValue = transactions.length > 0 ? totalAmount / transactions.length / 100 : 0;
+      const avgRedemptionValue = safeTransactions.length > 0 ? totalAmount / safeTransactions.length / 100 : 0;
       // Prepare daily data for charts
       // Determine date range
       let chartStart = rangeStart;
       let chartEnd = new Date();
       if (!chartStart) {
         // If all time, use earliest deposit or transaction
-        const allDates = [...deposits.map(d => new Date(d.created_at)), ...transactions.map(t => new Date(t.created_at))];
+        const allDates = [...safeDeposits.map(d => new Date(d.created_at)), ...safeTransactions.map(t => new Date(t.created_at))];
         if (allDates.length > 0) {
           chartStart = new Date(Math.min(...allDates.map(d => d.getTime())));
         } else {
@@ -245,12 +292,12 @@ export default function AnalyticsScreen() {
       // Daily totals for deposits
       const dailyDeposits = days.map(day => {
         const dayStr = day.toISOString().slice(0,10);
-        return deposits.filter(dep => dep.created_at.slice(0,10) === dayStr).reduce((sum, dep) => sum + (dep.amount || 0), 0) / 100;
+        return safeDeposits.filter(dep => dep.created_at && dep.created_at.slice(0,10) === dayStr).reduce((sum, dep) => sum + (dep.amount || 0), 0) / 100;
       });
       // Daily totals for redemptions
       const dailyRedemptions = days.map(day => {
         const dayStr = day.toISOString().slice(0,10);
-        return transactions.filter(tx => tx.created_at.slice(0,10) === dayStr).reduce((sum, tx) => sum + (tx.amount || 0), 0) / 100;
+        return safeTransactions.filter(tx => tx.created_at && tx.created_at.slice(0,10) === dayStr).reduce((sum, tx) => sum + (tx.amount || 0), 0) / 100;
       });
       // Always show exactly 4 labels: first, 1/3, 2/3, last
       let dayLabels = Array(days.length).fill('');
@@ -293,6 +340,7 @@ export default function AnalyticsScreen() {
         },
       });
     } catch (err) {
+      console.error('Analytics fetch error:', err);
       setError('Failed to load analytics data');
     } finally {
       setLoading(false);
@@ -302,7 +350,7 @@ export default function AnalyticsScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.text.white} />
+        <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>Loading analytics...</Text>
       </View>
     );
@@ -316,226 +364,235 @@ export default function AnalyticsScreen() {
     );
   }
 
-  return (
-    <ScrollView style={styles.container}>
-      {/* Header: Logo and Title */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 24, marginBottom: 8, paddingHorizontal: 20 }}>
-        {analytics.logo_url ? (
-          <Image
-            source={{ uri: analytics.logo_url }}
-            style={{ width: 48, height: 48, borderRadius: 24, marginRight: 12 }}
-            resizeMode="cover"
-          />
-        ) : (
-          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: COLORS.primary, justifyContent: 'center', alignItems: 'center', marginRight: 12 }}>
-            <Text style={{ color: COLORS.text.white, fontWeight: 'bold', fontSize: 24 }}>?</Text>
-          </View>
-        )}
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: COLORS.text.white, fontWeight: 'bold', fontSize: 18 }}>{analytics.locationName || 'Business Name'}</Text>
-        </View>
-        <TouchableOpacity
-          style={{ marginLeft: 8, minWidth: 120, backgroundColor: COLORS.surface.card, borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' }}
-          onPress={() => setShowTimeRangeModal(true)}
-        >
-          <Text style={{ color: COLORS.text.white, fontWeight: '600' }}>{timeRanges.find(r => r.value === timeRange)?.label || 'Select Range'}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Time Range Selection Modal */}
-      <Modal visible={showTimeRangeModal} transparent animationType="slide" onRequestClose={() => setShowTimeRangeModal(false)}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)' }}>
-          <View style={{ backgroundColor: COLORS.surface.card, borderRadius: 12, padding: 24, width: '90%', maxWidth: 400 }}>
-            <Text style={{ color: COLORS.text.white, fontSize: 18, fontWeight: 'bold', marginBottom: 16 }}>Select Time Range</Text>
-            {timeRanges.map(range => (
+    return (
+    <BackgroundGradient>
+      <MeteorBackground />
+      <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }}>
+        <StatusBar style="light" backgroundColor="transparent" translucent={true} />
+        <ScrollView style={{ flex: 1 }} onContentSizeChange={(w, h) => setContentHeight(h)}>
+          <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 32 }}>
+            {/* Header: Logo and Title */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 16, marginBottom: 8 }}>
+              <Text style={{ color: COLORS.text.white, fontWeight: 'bold', fontSize: 18, flex: 1 }}>Analytics</Text>
               <TouchableOpacity
-                key={range.value}
-                style={{ padding: 12, backgroundColor: timeRange === range.value ? COLORS.primary : COLORS.surface.secondary, borderRadius: 8, marginBottom: 8 }}
-                onPress={() => {
-                  setTimeRange(range.value);
-                  setShowTimeRangeModal(false);
-                }}
+                style={{ marginLeft: 8, minWidth: 120, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 8, paddingVertical: 8, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' }}
+                onPress={() => setShowTimeRangeModal(true)}
               >
-                <Text style={{ color: COLORS.text.white }}>{range.label}</Text>
+                <Text style={{ color: COLORS.text.white, fontWeight: '600' }}>{timeRanges.find(r => r.value === timeRange)?.label || 'Select Range'}</Text>
               </TouchableOpacity>
-            ))}
-            <View style={{ flexDirection: 'row', marginTop: 16 }}>
+            </View>
+
+            {/* Overview Section */}
+            <GlassCard style={{ marginBottom: 24 }} borderRadius={16}>
+              <Text style={styles.sectionTitle}>
+                {(() => {
+                  switch (timeRange) {
+                    case 'all': return 'Overview (All Time)';
+                    case 'day': return 'Overview (Today)';
+                    case 'week': return 'Overview (This Week)';
+                    case 'month': return 'Overview (This Month)';
+                    case '3month': return 'Overview (Last 3 Months)';
+                    case '6month': return 'Overview (Last 6 Months)';
+                    case 'year': return 'Overview (This Year)';
+                    default: return 'Overview';
+                  }
+                })()}
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                <View style={{ width: '48%', marginBottom: 8, alignItems: 'center' }}>
+                  <Text style={styles.metricLabel}>Total Deposits</Text>
+                  <Text style={styles.metricValue}>${(analytics.totalDeposits / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+                </View>
+                <View style={{ width: '48%', marginBottom: 8, alignItems: 'center' }}>
+                  <Text style={styles.metricLabel}>Total Redemptions</Text>
+                  <Text style={styles.metricValue}>{analytics.totalRedemptions}</Text>
+                </View>
+                <View style={{ width: '48%', marginBottom: 8, alignItems: 'center' }}>
+                  <Text style={styles.metricLabel}>Amount Redeemed</Text>
+                  <Text style={styles.metricValue}>${(analytics.amountRedeemed / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+                </View>
+                <View style={{ width: '48%', marginBottom: 8, alignItems: 'center' }}>
+                  <Text style={styles.metricLabel}>Left to Redeem</Text>
+                  <Text style={styles.metricValue}>${(analytics.leftToRedeem / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
+                </View>
+                <View style={{ width: '48%', marginBottom: 8, alignItems: 'center' }}>
+                  <Text style={styles.metricLabel}>New Users</Text>
+                  <Text style={styles.metricValue}>+{analytics.newUsers}</Text>
+                </View>
+                <View style={{ width: '48%', marginBottom: 8, alignItems: 'center' }}>
+                  <Text style={styles.metricLabel}>% Returning Users</Text>
+                  <Text style={styles.metricValue}>{analytics.returningUsersPercent}%</Text>
+                </View>
+              </View>
+            </GlassCard>
+
+            {/* Daily Revenue Breakdown (Line Charts) */}
+            <GlassCard style={{ marginBottom: 24 }} borderRadius={16}>
+              <Text style={styles.sectionTitle}>Daily Revenue Breakdown</Text>
+              {[
+                { label: 'Redemptions', color: '#FFFFFF', data: analytics.chartData?.dailyRedemptions || [] },
+                { label: 'Deposits', color: '#FFFFFF', data: analytics.chartData?.dailyDeposits || [] }
+              ].map((chart, idx) => {
+                const cx = `${randomInt(30, 70)}%`;
+                const cy = `${randomInt(30, 70)}%`;
+                const chartData = {
+                  labels: analytics.chartData?.dayLabels || [],
+                  datasets: [{
+                    data: chart.data || [],
+                    color: () => chart.color,
+                    strokeWidth: 2
+                  }]
+                };
+                return (
+                  <View key={chart.label} style={styles.purpleGraphCard}>
+                    <Text style={styles.chartLabel}>{chart.label}</Text>
+                    {chartData.datasets[0].data && chartData.datasets[0].data.length > 0 ? (
+                      <LineChart
+                        data={chartData}
+                        width={Dimensions.get('window').width - 96}
+                        height={200}
+                        chartConfig={{
+                          backgroundColor: 'transparent',
+                          backgroundGradientFrom: 'transparent',
+                          backgroundGradientTo: 'transparent',
+                          backgroundGradientFromOpacity: 0,
+                          backgroundGradientToOpacity: 0,
+                          decimalPlaces: 0,
+                          color: (opacity = 1) => chart.color,
+                          labelColor: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+                          style: {
+                            borderRadius: 16,
+                          },
+                          propsForDots: {
+                            r: "6",
+                            strokeWidth: "2",
+                            stroke: chart.color,
+                          },
+                          propsForLabels: {
+                            color: '#FFFFFF',
+                          },
+                          propsForBackgroundLines: {
+                            strokeDasharray: '',
+                            stroke: 'rgba(255, 255, 255, 0.3)',
+                            strokeWidth: 1,
+                          },
+                        }}
+                        bezier
+                        style={{
+                          marginVertical: 8,
+                          borderRadius: 16,
+                          marginLeft: -32,
+                        }}
+                      />
+                    ) : (
+                      <Text style={styles.noDataText}>[No data]</Text>
+                    )}
+                  </View>
+                );
+              })}
+            </GlassCard>
+
+            {/* Top Performing Items (Redemptions) */}
+            <GlassCard style={{ marginBottom: 24 }} borderRadius={16}>
+              <Text style={styles.sectionTitle}>Top Performing Items (Redemptions)</Text>
+              <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingBottom: 6, marginBottom: 6 }}>
+                <Text style={[styles.metricLabel, { flex: 2 }]}>Item</Text>
+                <Text style={[styles.metricLabel, { flex: 1, textAlign: 'right' }]}>Redempd</Text>
+                <Text style={[styles.metricLabel, { flex: 1, textAlign: 'right' }]}>Uses</Text>
+                <Text style={[styles.metricLabel, { flex: 1, textAlign: 'right' }]}>Avg Deposit</Text>
+                <Text style={[styles.metricLabel, { flex: 1, textAlign: 'right' }]}>Revenue</Text>
+              </View>
+              {(analytics.topItems || []).map((item, idx) => (
+                <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: COLORS.surface.secondary }}>
+                  <Text style={{ color: COLORS.text.white, flex: 2 }}>{item.name}</Text>
+                  <Text style={{ color: COLORS.text.white, flex: 1, textAlign: 'right' }}>{item.redempd}</Text>
+                  <Text style={{ color: COLORS.text.white, flex: 1, textAlign: 'right' }}>{item.uses}</Text>
+                  <Text style={{ color: COLORS.text.white, flex: 1, textAlign: 'right' }}>${(item.price || 0).toFixed(2)}</Text>
+                  <Text style={{ color: COLORS.text.white, flex: 1, textAlign: 'right' }}>${(item.revenue || 0).toFixed(2)}</Text>
+                </View>
+              ))}
+            </GlassCard>
+
+            {/* Time Analytics */}
+            <GlassCard style={{ marginBottom: 24 }} borderRadius={16}>
+              <Text style={styles.sectionTitle}>Time Analytics</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
+                <View style={{ width: '32%', marginBottom: 8, alignItems: 'center' }}>
+                  <Text style={styles.metricLabel}>Busiest Hour</Text>
+                  <Text style={styles.metricValue}>{analytics.timeMetrics?.busiestHour || 'N/A'}</Text>
+                </View>
+                <View style={{ width: '32%', marginBottom: 8, alignItems: 'center' }}>
+                  <Text style={styles.metricLabel}>Busiest Day</Text>
+                  <Text style={styles.metricValue}>{analytics.timeMetrics?.busiestDay || 'N/A'}</Text>
+                </View>
+                <View style={{ width: '32%', marginBottom: 8, alignItems: 'center' }}>
+                  <Text style={styles.metricLabel}>Avg. Order Value</Text>
+                  <Text style={styles.metricValue}>${(analytics.timeMetrics?.averageRedemptionValue || 0).toFixed(2)}</Text>
+                </View>
+              </View>
+            </GlassCard>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+
+      {/* Time Range Modal - Keep existing */}
+      {showTimeRangeModal && (
+        <Modal
+          visible={showTimeRangeModal}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowTimeRangeModal(false)}
+        >
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+            <View style={{ width: '90%', maxWidth: 400, borderRadius: 16, padding: 24, backgroundColor: BACKGROUND_BASE }}>
+              <Text style={{ color: COLORS.text.white, fontSize: 20, fontWeight: 'bold', marginBottom: 20, textAlign: 'center' }}>Select Time Range</Text>
+              {timeRanges.map((range) => (
+                <TouchableOpacity
+                  key={range.value}
+                  style={{
+                    paddingVertical: 14,
+                    paddingHorizontal: 8,
+                    borderRadius: 8,
+                    marginBottom: 8,
+                    backgroundColor: timeRange === range.value ? COLORS.primary : 'transparent',
+                    alignItems: 'center',
+                  }}
+                  onPress={() => {
+                    setTimeRange(range.value);
+                    setShowTimeRangeModal(false);
+                  }}
+                >
+                  <Text style={{
+                    color: COLORS.text.white,
+                    fontWeight: timeRange === range.value ? 'bold' : '600',
+                    fontSize: 16,
+                  }}>{range.label}</Text>
+                </TouchableOpacity>
+              ))}
               <TouchableOpacity
-                style={{ flex: 1, backgroundColor: COLORS.surface.secondary, padding: 12, borderRadius: 8, alignItems: 'center' }}
+                style={{ marginTop: 8, paddingVertical: 12, borderRadius: 8, alignItems: 'center', backgroundColor: 'red' }}
                 onPress={() => setShowTimeRangeModal(false)}
               >
-                <Text style={{ color: COLORS.text.white }}>Cancel</Text>
+                <Text style={{ color: COLORS.text.white, fontWeight: '600', fontSize: 16 }}>Cancel</Text>
               </TouchableOpacity>
             </View>
           </View>
-        </View>
-      </Modal>
-
-      {/* Overview Section */}
-      <View style={[styles.section, { marginHorizontal: 16, marginTop: 8, marginBottom: 16, backgroundColor: COLORS.surface.card }]}> 
-        {/* Overview Title: More natural language for each time range */}
-        <Text style={{ color: COLORS.text.muted, fontWeight: '600', fontSize: 16, marginBottom: 8 }}>
-          {(() => {
-            switch (timeRange) {
-              case 'all': return 'Overview (All Time)';
-              case 'day': return 'Overview (Today)';
-              case 'week': return 'Overview (This Week)';
-              case 'month': return 'Overview (This Month)';
-              case '3month': return 'Overview (Last 3 Months)';
-              case '6month': return 'Overview (Last 6 Months)';
-              case 'year': return 'Overview (This Year)';
-              default: return 'Overview';
-            }
-          })()}
-        </Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-          <View style={{ width: '48%', marginBottom: 8, alignItems: 'center' }}>
-            <Text style={styles.metricLabel}>Total Deposits</Text>
-            <Text style={styles.metricValue}>${(analytics.totalDeposits / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
-          </View>
-          <View style={{ width: '48%', marginBottom: 8, alignItems: 'center' }}>
-            <Text style={styles.metricLabel}>Total Redemptions</Text>
-            <Text style={styles.metricValue}>{analytics.totalRedemptions}</Text>
-          </View>
-          <View style={{ width: '48%', marginBottom: 8, alignItems: 'center' }}>
-            <Text style={styles.metricLabel}>Amount Redeemed</Text>
-            <Text style={styles.metricValue}>${(analytics.amountRedeemed / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
-          </View>
-          <View style={{ width: '48%', marginBottom: 8, alignItems: 'center' }}>
-            <Text style={styles.metricLabel}>Left to Redeem</Text>
-            <Text style={styles.metricValue}>${(analytics.leftToRedeem / 100).toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
-          </View>
-          <View style={{ width: '48%', marginBottom: 8, alignItems: 'center' }}>
-            <Text style={styles.metricLabel}>New Users</Text>
-            <Text style={styles.metricValue}>+{analytics.newUsers}</Text>
-          </View>
-          <View style={{ width: '48%', marginBottom: 8, alignItems: 'center' }}>
-            <Text style={styles.metricLabel}>% Returning Users</Text>
-            <Text style={styles.metricValue}>{analytics.returningUsersPercent}%</Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Daily Revenue Breakdown (Line Charts) */}
-      <View style={[styles.section, { marginHorizontal: 16, marginBottom: 16, backgroundColor: COLORS.surface.card }]}> 
-        <Text style={{ color: COLORS.text.white, fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>Daily Revenue Breakdown</Text>
-        {/* Redemptions Chart */}
-        <Text style={{ color: COLORS.text.muted, fontWeight: '600', marginBottom: 2 }}>Redemptions</Text>
-        {analytics.chartData && analytics.chartData.dailyRedemptions.length > 0 ? (
-          <View>
-            <LineChart
-              data={{
-                labels: analytics.chartData.dayLabels,
-                datasets: [
-                  { data: analytics.chartData.dailyRedemptions, color: () => COLORS.primary, strokeWidth: 2 },
-                ],
-              }}
-              width={Dimensions.get('window').width - 56}
-              height={120}
-              chartConfig={{
-                backgroundColor: COLORS.surface.card,
-                backgroundGradientFrom: COLORS.surface.card,
-                backgroundGradientTo: COLORS.surface.card,
-                decimalPlaces: 2,
-                color: (opacity = 1) => COLORS.primary,
-                labelColor: (opacity = 1) => COLORS.text.muted,
-                propsForDots: { r: '2', strokeWidth: '1', stroke: COLORS.primary },
-                propsForBackgroundLines: { stroke: COLORS.surface.secondary },
-              }}
-              bezier
-              style={{ marginBottom: 0, borderRadius: 8 }}
-            />
-            <Text style={{ color: COLORS.text.muted, fontSize: 13, textAlign: 'center', marginTop: 2, marginBottom: 12 }}>Date</Text>
-          </View>
-        ) : (
-          <Text style={{ color: COLORS.text.muted, fontSize: 14, marginBottom: 12 }}>[No data]</Text>
-        )}
-        {/* Deposits Chart */}
-        <Text style={{ color: COLORS.text.muted, fontWeight: '600', marginBottom: 2 }}>Deposits</Text>
-        {analytics.chartData && analytics.chartData.dailyDeposits.length > 0 ? (
-          <View>
-            <LineChart
-              data={{
-                labels: analytics.chartData.dayLabels,
-                datasets: [
-                  { data: analytics.chartData.dailyDeposits, color: () => COLORS.secondary, strokeWidth: 2 },
-                ],
-              }}
-              width={Dimensions.get('window').width - 56}
-              height={120}
-              chartConfig={{
-                backgroundColor: COLORS.surface.card,
-                backgroundGradientFrom: COLORS.surface.card,
-                backgroundGradientTo: COLORS.surface.card,
-                decimalPlaces: 2,
-                color: (opacity = 1) => COLORS.secondary,
-                labelColor: (opacity = 1) => COLORS.text.muted,
-                propsForDots: { r: '2', strokeWidth: '1', stroke: COLORS.secondary },
-                propsForBackgroundLines: { stroke: COLORS.surface.secondary },
-              }}
-              bezier
-              style={{ marginBottom: 0, borderRadius: 8 }}
-            />
-            <Text style={{ color: COLORS.text.muted, fontSize: 13, textAlign: 'center', marginTop: 2, marginBottom: 4 }}>Date</Text>
-          </View>
-        ) : (
-          <Text style={{ color: COLORS.text.muted, fontSize: 14 }}>[No data]</Text>
-        )}
-      </View>
-
-      {/* Top Performing Items (Redemptions) */}
-      <View style={[styles.section, { marginHorizontal: 16, marginBottom: 16, backgroundColor: COLORS.surface.card }]}> 
-        <Text style={{ color: COLORS.text.white, fontWeight: 'bold', fontSize: 16, marginBottom: 8 }}>Top Performing Items (Redemptions)</Text>
-        <View style={{ flexDirection: 'row', borderBottomWidth: 1, borderBottomColor: COLORS.border, paddingBottom: 6, marginBottom: 6 }}>
-          <Text style={[styles.metricLabel, { flex: 2 }]}>Item</Text>
-          <Text style={[styles.metricLabel, { flex: 1, textAlign: 'right' }]}>Redempd</Text>
-          <Text style={[styles.metricLabel, { flex: 1, textAlign: 'right' }]}>Uses</Text>
-          <Text style={[styles.metricLabel, { flex: 1, textAlign: 'right' }]}>Avg Deposit</Text>
-          <Text style={[styles.metricLabel, { flex: 1, textAlign: 'right' }]}>Revenue</Text>
-        </View>
-        {analytics.topItems.map((item, idx) => (
-          <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: COLORS.surface.secondary }}>
-            <Text style={{ color: COLORS.text.white, flex: 2 }}>{item.name}</Text>
-            <Text style={{ color: COLORS.text.muted, flex: 1, textAlign: 'right' }}>{item.redempd}</Text>
-            <Text style={{ color: COLORS.text.muted, flex: 1, textAlign: 'right' }}>{item.uses}</Text>
-            <Text style={{ color: COLORS.text.muted, flex: 1, textAlign: 'right' }}>${item.price.toFixed(2)}</Text>
-            <Text style={{ color: COLORS.text.muted, flex: 1, textAlign: 'right' }}>${item.revenue.toFixed(2)}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* Time Analytics */}
-      <View style={[styles.section, { marginHorizontal: 16, marginBottom: 32, backgroundColor: COLORS.surface.card }]}> 
-        <Text style={{ color: COLORS.text.muted, fontWeight: 'bold', fontSize: 15, marginBottom: 8 }}>Time Analytics</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-          <View style={{ width: '32%', marginBottom: 8, alignItems: 'center' }}>
-            <Text style={styles.metricLabel}>Busiest Hour</Text>
-            <Text style={styles.metricValue}>{analytics.timeMetrics.busiestHour}</Text>
-          </View>
-          <View style={{ width: '32%', marginBottom: 8, alignItems: 'center' }}>
-            <Text style={styles.metricLabel}>Busiest Day</Text>
-            <Text style={styles.metricValue}>{analytics.timeMetrics.busiestDay}</Text>
-          </View>
-          <View style={{ width: '32%', marginBottom: 8, alignItems: 'center' }}>
-            <Text style={styles.metricLabel}>Avg. Order Value</Text>
-            <Text style={styles.metricValue}>${analytics.timeMetrics.averageRedemptionValue.toFixed(2)}</Text>
-          </View>
-        </View>
-      </View>
-    </ScrollView>
+        </Modal>
+      )}
+      </BackgroundGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface.primary,
+    backgroundColor: BACKGROUND_BASE,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.surface.primary,
+    backgroundColor: BACKGROUND_BASE,
   },
   loadingText: {
     marginTop: 10,
@@ -581,7 +638,7 @@ const styles = StyleSheet.create({
   amountText: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.primary,
+    color: COLORS.text.white,
   },
   itemRow: {
     flexDirection: 'row',
@@ -597,7 +654,7 @@ const styles = StyleSheet.create({
   },
   itemCount: {
     fontSize: 14,
-    color: COLORS.text.muted,
+    color: COLORS.text.white,
   },
   metricsGrid: {
     flexDirection: 'row',
@@ -614,17 +671,97 @@ const styles = StyleSheet.create({
   metricValue: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: COLORS.primary,
+    color: COLORS.text.white,
     marginBottom: 4,
   },
   metricLabel: {
     fontSize: 12,
-    color: COLORS.text.muted,
+    color: COLORS.text.white,
     textAlign: 'center',
   },
   noteText: {
-    color: COLORS.text.muted,
+    color: COLORS.text.white,
     fontSize: 14,
     marginTop: 8,
+  },
+  purpleGraphCard: {
+    marginBottom: 16,
+    borderRadius: 16,
+    overflow: 'hidden',
+    padding: 16,
+    minHeight: 200,
+    justifyContent: 'center',
+    backgroundColor: BACKGROUND_BASE,
+    position: 'relative',
+  },
+  chartLabel: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text.white,
+    marginBottom: 8,
+  },
+  chartContainer: {
+    marginBottom: 16,
+    borderRadius: 8,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  chartAxisLabel: {
+    fontSize: 13,
+    color: COLORS.text.white,
+    textAlign: 'center',
+  },
+  noDataText: {
+    fontSize: 14,
+    color: COLORS.text.white,
+    textAlign: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    padding: 24,
+    width: '90%',
+    maxWidth: 400,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text.white,
+    marginBottom: 16,
+  },
+  timeRangeOption: {
+    padding: 12,
+    backgroundColor: 'transparent',
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  selectedTimeRange: {
+    backgroundColor: COLORS.primary,
+  },
+  timeRangeText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text.white,
+  },
+  selectedTimeRangeText: {
+    color: COLORS.text.white,
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: COLORS.surface.secondary,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: COLORS.text.white,
+    fontWeight: '600',
+    fontSize: 16,
   },
 }); 

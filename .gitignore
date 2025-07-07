@@ -39,3 +39,8 @@ yarn-error.*
 # Prebuild directories
 /android
 /ios
+supabase/functions/join-waitlist/.npmrc
+supabase/functions/join-waitlist/deno.json
+supabase/functions/join-waitlist/index.ts
+supabase/functions/join-waitlist/.vscode/settings.json
+supabase/config.toml

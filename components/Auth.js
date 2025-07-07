@@ -91,7 +91,6 @@ export default function Auth() {
             {
               id: data.user.id,
               email: email,
-              created_at: new Date().toISOString(),
               updated_at: new Date().toISOString(),
             }
           ]);

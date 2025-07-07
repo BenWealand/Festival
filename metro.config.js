@@ -11,6 +11,6 @@ module.exports = {
   resolver: {
     ...defaultConfig.resolver,
     assetExts: defaultConfig.resolver.assetExts.filter(ext => ext !== 'svg'),
-    sourceExts: [...defaultConfig.resolver.sourceExts, 'svg'],
+    sourceExts: [...defaultConfig.resolver.sourceExts, 'svg', 'mjs'], // 👈 add 'mjs' here
   },
 };

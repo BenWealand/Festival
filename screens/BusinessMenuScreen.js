@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -11,11 +11,18 @@ import {
   Modal
 } from 'react-native';
 import { supabase } from '../lib/supabase';
-import { COLORS } from '../constants/theme';
+import { COLORS, BACKGROUND_BASE, BACKGROUND_RADIAL } from '../constants/theme';
 import { FontAwesome } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { YOUR_BACKEND_API_URL } from '@env';
+import GlassCard from '../components/GlassCard';
+import { StatusBar } from 'expo-status-bar';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import GlowingButton from '../components/GlowingButton';
+import BackgroundGradient from '../components/BackgroundGradient';
+import MeteorBackground from '../components/MeteorBackground';
 
 export default function BusinessMenuScreen() {
   const { user } = useAuth();
@@ -31,6 +38,23 @@ export default function BusinessMenuScreen() {
   const [price, setPrice] = useState('');
   const [category, setCategory] = useState('');
   const [locationId, setLocationId] = useState(null);
+  const [contentHeight, setContentHeight] = useState(0);
+  const radialGradients = useMemo(() => [
+    {
+      id: 'menu-bg-radial-1',
+      cx: `${Math.floor(Math.random() * 80) + 10}%`,
+      cy: `${Math.floor(Math.random() * 80) + 10}%`,
+      rx: '60%',
+      ry: '60%',
+    },
+    {
+      id: 'menu-bg-radial-2',
+      cx: `${Math.floor(Math.random() * 80) + 10}%`,
+      cy: `${Math.floor(Math.random() * 80) + 10}%`,
+      rx: '70%',
+      ry: '70%',
+    },
+  ], []);
 
   useEffect(() => {
     fetchLocationAndMenu();
@@ -188,7 +212,7 @@ export default function BusinessMenuScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.text.white} />
+        <ActivityIndicator size="large" color={COLORS.primary} />
         <Text style={styles.loadingText}>Loading menu...</Text>
       </View>
     );
@@ -221,125 +245,133 @@ export default function BusinessMenuScreen() {
   }, {});
 
   return (
-    <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        {Object.entries(menuByCategory).map(([category, items]) => (
-          <View key={category} style={styles.categorySection}>
-            <Text style={styles.categoryTitle}>{category}</Text>
-            {items.map((item) => (
-              <View key={item.id} style={styles.menuItem}>
-                <View style={styles.menuItemInfo}>
-                  <Text style={styles.itemName}>{item.name}</Text>
-                  <Text style={styles.itemDescription}>{item.description}</Text>
-                  <Text style={styles.itemPrice}>${(item.price / 100).toFixed(2)}</Text>
+    <BackgroundGradient>
+      <MeteorBackground />
+      <View style={styles.container}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }}>
+          <StatusBar style="light" backgroundColor="transparent" translucent={true} />
+          <ScrollView
+            style={{ flex: 1, backgroundColor: 'transparent' }}
+            contentContainerStyle={{ paddingBottom: 100 }}
+          >
+            {Object.entries(menuByCategory).map(([category, items]) => (
+              <GlassCard key={category} style={{ marginBottom: 24, paddingVertical: 12, paddingHorizontal: 20 }} borderRadius={16}>
+                <Text style={styles.categoryTitle}>{category}</Text>
+                <View style={{ marginTop: 8 }}>
+                  {items.map((item) => (
+                    <View
+                      key={item.id}
+                      style={{
+                        backgroundColor: BACKGROUND_BASE,
+                        borderRadius: 12,
+                        padding: 14,
+                        marginBottom: 12,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <View style={{ flex: 1, marginRight: 16 }}>
+                        <Text style={{ color: '#FFF', fontWeight: 'bold', fontSize: 15, marginBottom: 2 }}>{item.name}</Text>
+                        <Text style={{ color: '#BBB', fontSize: 13, marginBottom: 2 }}>{item.description}</Text>
+                        <Text style={{ color: COLORS.primary, fontWeight: 'bold', fontSize: 15 }}>${(item.price / 100).toFixed(2)}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <TouchableOpacity style={styles.editButton} onPress={() => openEditModal(item)}>
+                          <FontAwesome name="edit" size={20} color={COLORS.primary} />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteItem(item.id)}>
+                          <FontAwesome name="trash" size={20} color={COLORS.error} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
                 </View>
-                <View style={styles.menuItemActions}>
-                  <TouchableOpacity 
-                    style={styles.editButton}
-                    onPress={() => openEditModal(item)}
-                  >
-                    <FontAwesome name="edit" size={20} color={COLORS.primary} />
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.deleteButton}
-                    onPress={() => handleDeleteItem(item.id)}
-                  >
-                    <FontAwesome name="trash" size={20} color={COLORS.error} />
-                  </TouchableOpacity>
-                </View>
-              </View>
+              </GlassCard>
             ))}
-          </View>
-        ))}
-      </ScrollView>
-
-      <TouchableOpacity 
-        style={styles.addButton}
-        onPress={() => {
-          resetForm();
-          setShowAddModal(true);
-        }}
-      >
-        <FontAwesome name="plus" size={24} color={COLORS.text.white} />
-      </TouchableOpacity>
-
-      <Modal
-        visible={showAddModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowAddModal(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {editingItem ? 'Edit Menu Item' : 'Add Menu Item'}
-            </Text>
-            
-            <TextInput
-              style={styles.input}
-              placeholder="Name"
-              placeholderTextColor={COLORS.text.muted}
-              value={name}
-              onChangeText={setName}
-            />
-            
-            <TextInput
-              style={styles.input}
-              placeholder="Description"
-              placeholderTextColor={COLORS.text.muted}
-              value={description}
-              onChangeText={setDescription}
-              multiline
-            />
-            
-            <TextInput
-              style={styles.input}
-              placeholder="Price (e.g., 9.99)"
-              placeholderTextColor={COLORS.text.muted}
-              value={price}
-              onChangeText={setPrice}
-              keyboardType="decimal-pad"
-            />
-            
-            <TextInput
-              style={styles.input}
-              placeholder="Category"
-              placeholderTextColor={COLORS.text.muted}
-              value={category}
-              onChangeText={setCategory}
-            />
-
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => {
-                  setShowAddModal(false);
-                  resetForm();
-                }}
-              >
-                <Text style={styles.buttonText}>Cancel</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[styles.modalButton, styles.confirmButton]}
-                onPress={editingItem ? handleEditItem : handleAddItem}
-              >
-                <Text style={styles.buttonText}>
-                  {editingItem ? 'Update' : 'Add'}
+          </ScrollView>
+          <GlowingButton
+            icon="plus"
+            onPress={() => {
+              resetForm();
+              setShowAddModal(true);
+            }}
+            buttonWidth={80}
+            buttonHeight={80}
+            style={{ position: 'absolute', right: 24, bottom: 32, borderRadius: 40, zIndex: 10, padding: 0 }}
+          />
+          <Modal
+            visible={showAddModal}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setShowAddModal(false)}
+          >
+            <View style={styles.modalContainer}>
+              <GlassCard style={styles.modalContent} borderRadius={16}>
+                <Text style={styles.modalTitle}>
+                  {editingItem ? 'Edit Menu Item' : 'Add Menu Item'}
                 </Text>
-              </TouchableOpacity>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Name"
+                  placeholderTextColor={COLORS.text.muted}
+                  value={name}
+                  onChangeText={setName}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Description"
+                  placeholderTextColor={COLORS.text.muted}
+                  value={description}
+                  onChangeText={setDescription}
+                  multiline
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Price (e.g., 9.99)"
+                  placeholderTextColor={COLORS.text.muted}
+                  value={price}
+                  onChangeText={setPrice}
+                  keyboardType="decimal-pad"
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="Category"
+                  placeholderTextColor={COLORS.text.muted}
+                  value={category}
+                  onChangeText={setCategory}
+                />
+                <View style={styles.modalButtons}>
+                  <GlowingButton
+                    text="Cancel"
+                    onPress={() => {
+                      setShowAddModal(false);
+                      resetForm();
+                    }}
+                    buttonWidth={120}
+                    buttonHeight={48}
+                    style={{ marginRight: 8 }}
+                  />
+                  <GlowingButton
+                    text={editingItem ? 'Update' : 'Add'}
+                    onPress={editingItem ? handleEditItem : handleAddItem}
+                    buttonWidth={120}
+                    buttonHeight={48}
+                    style={{ marginLeft: 8 }}
+                  />
+                </View>
+              </GlassCard>
             </View>
-          </View>
-        </View>
-      </Modal>
-    </View>
+          </Modal>
+        </SafeAreaView>
+      </View>
+    </BackgroundGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface.primary,
   },
   scrollView: {
     flex: 1,
@@ -348,7 +380,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.surface.primary,
+    backgroundColor: BACKGROUND_BASE,
   },
   loadingText: {
     marginTop: 10,
@@ -360,7 +392,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: COLORS.surface.primary,
+    backgroundColor: BACKGROUND_BASE,
   },
   errorText: {
     color: COLORS.error,
@@ -380,7 +412,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: COLORS.surface.card,
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
@@ -446,7 +477,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContent: {
-    backgroundColor: COLORS.surface.card,
+    backgroundColor: 'rgba(30,0,50,0.92)',
     borderRadius: 12,
     padding: 20,
     width: '90%',
@@ -460,7 +491,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   input: {
-    backgroundColor: COLORS.surface.primary,
+    backgroundColor: 'rgba(30,0,50,0.7)',
     borderRadius: 8,
     padding: 12,
     marginBottom: 16,
@@ -480,7 +511,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   cancelButton: {
-    backgroundColor: COLORS.surface.primary,
+    backgroundColor: 'rgba(30,0,50,0.7)',
   },
   confirmButton: {
     backgroundColor: COLORS.primary,

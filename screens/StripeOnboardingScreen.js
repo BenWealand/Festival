@@ -5,6 +5,11 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { COLORS } from '../constants/theme';
 import { supabase } from '../lib/supabase';
 import { stripe } from '../lib/stripe';
+import GlassCard from '../components/GlassCard';
+import GlowingButton from '../components/GlowingButton';
+import { StatusBar } from 'expo-status-bar';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 export default function StripeOnboardingScreen() {
   const navigation = useNavigation();

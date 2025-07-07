@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback, memo } from 'react';
+import React, { useState, useEffect, useCallback, memo, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, ActivityIndicator, Button, Platform } from 'react-native';
 import { FontAwesome } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
-import { COLORS } from '../constants/theme';
+import { COLORS, BACKGROUND_BASE, BACKGROUND_RADIAL } from '../constants/theme';
 import { useAuth } from '../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
 import Animated, { useSharedValue, useAnimatedStyle, useAnimatedScrollHandler, withSpring, interpolate, Extrapolate, runOnJS } from 'react-native-reanimated';
@@ -22,7 +22,14 @@ import PinkPurpleGradient from '../assets/gradients/pink_purple_gradient.svg';
 import PurpleGradient from '../assets/gradients/purple_gradient.svg';
 import TealBlueGradient from '../assets/gradients/teal_blue_gradient.svg';
 import ShadowPng from '../assets/shadow.png';
+import GlowingButton from '../components/GlowingButton';
+import GlassCard from '../components/GlassCard';
+import { StatusBar } from 'expo-status-bar';
+import OrderCarousel from '../components/OrderCarousel';
+// import { GlaringSegment } from '../components/GlaringSegment';
 // import { PanGestureHandler } from 'react-native-gesture-handler';
+import BackgroundGradient from '../components/BackgroundGradient';
+import MeteorBackground from '../components/MeteorBackground';
 
 const shadowBoxStyle = {
   ...Platform.select({
@@ -109,6 +116,13 @@ const gradientComponents = [
   PinkPurpleGradient,
   PurpleGradient,
   TealBlueGradient,
+];
+
+const quickActionGradients = [
+  ['#D62828', '#F77F00', '#FCBF49'],
+  ['#E75160', '#FF8181', '#FFADAD'],
+  ['#F77F00', '#FCBF49', '#FFE3B3'],
+  ['#E75160', '#D8315B', '#FF8181'],
 ];
 
 // CardStack for Apple Wallet-style UI
@@ -476,10 +490,31 @@ export default function HomeScreen() {
   });
   const [recentTransactions, setRecentTransactions] = useState([]);
   const [recentDeposits, setRecentDeposits] = useState([]);
+  const [activeOrders, setActiveOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isOwner, setIsOwner] = useState(false);
   const { user } = useAuth();
+  const [contentHeight, setContentHeight] = useState(0);
+
+  // Generate two random radial gradient positions
+  const radialGradients = useMemo(() => [
+    {
+      id: 'bg-radial-1',
+      cx: `${Math.floor(Math.random() * 80) + 10}%`,
+      cy: `${Math.floor(Math.random() * 80) + 10}%`,
+      rx: '60%',
+      ry: '60%',
+    },
+    {
+      id: 'bg-radial-2',
+      cx: `${Math.floor(Math.random() * 80) + 10}%`,
+      cy: `${Math.floor(Math.random() * 80) + 10}%`,
+      rx: '70%',
+      ry: '70%',
+    },
+  ], []);
 
   const fetchData = useCallback(async () => {
     if (!user?.id) {
@@ -526,6 +561,18 @@ export default function HomeScreen() {
           .single();
 
         if (businessError) throw businessError;
+
+        // Fetch active orders for preview
+        const { data: orders, error: ordersError } = await supabase
+          .from('transactions')
+          .select('*, transaction_items(*, menu_items(*))')
+          .eq('location_id', ownedLocation.id)
+          .in('status', ['in_progress', 'complete'])
+          .order('created_at', { ascending: true })
+        
+
+        if (ordersError) throw ordersError;
+        setActiveOrders(orders || []);
 
         // Fetch total balance for the location
         const { data: totalBalanceData, error: totalBalanceError } = await supabase
@@ -645,17 +692,14 @@ export default function HomeScreen() {
 
         setBusinessData({
           locations: locations?.map(location => ({
-            id: location.id,
-            name: location.name,
-            logo_url: location.logo_url,
-            points: location.balances?.[0]?.balance || 0,
-            isComingSoon: false  // Explicitly set this to false for all regular locations
+            ...location,
+            balance: location.balances[0]?.balance || 0
           })) || []
         });
       }
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      setError(`Failed to load data: ${error.message}`);
+    } catch (err) {
+      console.error('Error fetching data:', err);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -698,183 +742,185 @@ export default function HomeScreen() {
 
   // Render business owner dashboard
   if (isOwner) {
-    const QuickAction = ({ icon, title, onPress }) => (
-      <TouchableOpacity style={styles.quickAction} onPress={onPress}>
-        <FontAwesome name={icon} size={24} color={COLORS.text.white} />
-        <Text style={styles.quickActionText}>{title}</Text>
-      </TouchableOpacity>
-    );
-
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.surface.primary }}>
-        {/* Header with Profile and Inbox buttons */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, marginBottom: 8 }}>
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={{ padding: 8 }}>
-            <FontAwesome name="user" size={28} color={COLORS.primary} />
-          </TouchableOpacity>
-          <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.text.white, flex: 1, textAlign: 'center' }}>Home</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Inbox')} style={{ padding: 8 }}>
-            <FontAwesome name="envelope" size={26} color={COLORS.primary} />
-          </TouchableOpacity>
-        </View>
-        <ScrollView style={styles.container}>
-          {/* Business Header */}
-          <View style={styles.header}>
-            {businessData?.logo_url ? (
-              <Image 
-                source={{ uri: businessData.logo_url }} 
-                style={styles.logoLarge}
-                resizeMode="cover"
-              />
-            ) : (
-              <View style={styles.logoPlaceholderLarge}>
-                <FontAwesome name="building" size={48} color={COLORS.text.white} />
-              </View>
-            )}
-            <Text style={styles.businessNameLarge}>{businessData?.name}</Text>
+      <BackgroundGradient>
+        <MeteorBackground />
+        <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }}>
+          <StatusBar style="light" backgroundColor="transparent" translucent={true} />
+          {/* Header with Profile and Inbox buttons */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, marginBottom: 8 }}>
+            <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={{ padding: 8 }}>
+              <FontAwesome name="user" size={28} color="#FFF" />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 22, fontWeight: 'bold', color: '#FFF', flex: 1, textAlign: 'center' }}>Home</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Inbox')} style={{ padding: 8 }}>
+              <FontAwesome name="envelope" size={26} color="#FFF" />
+            </TouchableOpacity>
           </View>
-
-          {/* Performance Metrics */}
-          <View style={[styles.sectionBox, styles.statsRow]}>
-            <View style={styles.statBox}>
-              <Text style={styles.metricValue}>${(businessData?.total_revenue_deposits / 100 || 0).toFixed(2)}</Text>
-              <Text style={styles.metricLabel}>Total Deposited</Text>
+          <ScrollView
+            style={styles.container}
+            onContentSizeChange={(w, h) => setContentHeight(h)}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled={true}
+          >
+            {/* Business Header */}
+            <View style={styles.header}>
+              {businessData?.logo_url ? (
+                <Image 
+                  source={{ uri: businessData.logo_url }} 
+                  style={styles.logoLarge}
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.logoPlaceholderLarge}>
+                  <FontAwesome name="building" size={48} color={"#FFF"} />
+                </View>
+              )}
+              <Text style={styles.businessNameLarge}>{businessData?.name}</Text>
             </View>
-            <View style={styles.statBox}>
-              <Text style={styles.metricValue}>${(businessData?.amount_left_to_redeem / 100 || 0).toFixed(2)}</Text>
-              <Text style={styles.metricLabel}>Left to Redeem</Text>
-            </View>
-            <View style={styles.statBox}>
-              <Text style={styles.metricValue}>{businessData?.total_transactions || 0}</Text>
-              <Text style={styles.metricLabel}>Redemptions</Text>
-            </View>
-          </View>
 
-          {/* Quick Actions */}
-          <View style={styles.quickActionsGrid}>
-            <QuickAction 
-              icon="list" 
-              title="View Menu" 
-              onPress={() => navigation.navigate('LocationMenu')}
-            />
-            <QuickAction 
-              icon="users" 
-              title="Employee Tips"
-              onPress={() => navigation.navigate('EmployeeTips')}
-            />
-            <QuickAction 
-              icon="bar-chart" 
-              title="Analytics" 
-              onPress={() => navigation.navigate('Analytics')}
-            />
-            <QuickAction 
-              icon="shopping-basket" 
-              title="Active Orders" 
-              onPress={() => navigation.navigate('ActiveOrders')}
-            />
-          </View>
-
-          {/* Recent Deposits */}
-          <View style={[styles.sectionBox, {marginTop: 12}]}>
-            <Text style={[styles.sectionTitle, { color: COLORS.primary, fontSize: 20, fontWeight: 'bold', marginBottom: 8 }]}>Recent Deposits</Text>
-            {recentDeposits.length === 0 ? (
-              <Text style={styles.emptyText}>No recent deposits.</Text>
-            ) : (
-              recentDeposits.map((deposit) => (
-                <View key={deposit.id} style={styles.transactionItem}>
-                  <View style={styles.transactionInfo}>
-                    <Text style={styles.transactionCustomer}>{deposit.user_name}</Text>
-                    <Text style={styles.transactionDate}>
-                      {new Date(deposit.created_at).toLocaleDateString()}
-                    </Text>
+            {/* Performance Metrics (tappable) */}
+            <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('Analytics')}>
+              <GlassCard style={styles.card} borderRadius={16}>
+                <View style={styles.statsRow}>
+                  <View style={styles.statBox}>
+                    <Text style={styles.metricValue}>${(businessData?.total_revenue_deposits / 100 || 0).toFixed(2)}</Text>
+                    <Text style={styles.metricLabel}>Total Deposited</Text>
                   </View>
-                  <View style={styles.transactionAmount}>
-                    <Text style={styles.amountText}>+${(deposit.amount / 100).toFixed(2)}</Text>
+                  <View style={styles.statBox}>
+                    <Text style={styles.metricValue}>${(businessData?.amount_left_to_redeem / 100 || 0).toFixed(2)}</Text>
+                    <Text style={styles.metricLabel}>Left to Redeem</Text>
+                  </View>
+                  <View style={styles.statBox}>
+                    <Text style={styles.metricValue}>{businessData?.total_transactions || 0}</Text>
+                    <Text style={styles.metricLabel}>Redemptions</Text>
                   </View>
                 </View>
-              ))
-            )}
-          </View>
+              </GlassCard>
+            </TouchableOpacity>
 
-          {/* Recent Redemptions */}
-          <View style={[styles.sectionBox, {marginTop: 12}]}>
-            <Text style={[styles.sectionTitle, { color: COLORS.primary, fontSize: 20, fontWeight: 'bold', marginBottom: 8 }]}>Recent Redemptions</Text>
-            {recentTransactions.length === 0 ? (
-              <Text style={styles.emptyText}>No recent redemptions.</Text>
-            ) : (
-              recentTransactions.map((transaction) => (
-                <View 
-                  key={transaction.id}
-                  style={styles.transactionItem}
-                >
-                  <View style={styles.transactionInfo}>
-                    <Text style={styles.transactionCustomer}>{transaction.user_name}</Text>
-                    <Text style={styles.transactionDate}>
-                      {new Date(transaction.created_at).toLocaleDateString()}
-                    </Text>
-                  </View>
-                  <View style={styles.transactionAmount}>
-                    <Text style={styles.amountText}>-${(transaction.amount / 100).toFixed(2)}</Text>
-                    <View style={styles.transactionStatus}>
-                      <Text style={[
-                        styles.statusText,
-                        transaction.status === 'redeemed'
-                          ? { color: COLORS.secondary }
-                          : transaction.status === 'completed' || transaction.status === 'complete'
-                          ? { color: COLORS.primary }
-                          : transaction.status === 'in_progress'
-                          ? { color: COLORS.text.white }
-                          : { color: COLORS.text.muted }
-                      ]}>
-                        {transaction.status.replace('_', ' ')}
-                      </Text>
+            {/* Active Orders (tappable) */}
+            <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('ActiveOrders')}>
+              <GlassCard style={styles.card} borderRadius={16}>
+                <Text style={[styles.sectionTitle, { color: '#FFF', fontSize: 20, fontWeight: 'bold', marginBottom: 16 }]}>Active Orders</Text>
+                {ordersLoading ? (
+                  <ActivityIndicator color={COLORS.primary} />
+                ) : activeOrders.length === 0 ? (
+                  <Text style={styles.emptyText}>No active orders.</Text>
+                ) : (
+                  <OrderCarousel
+                    orders={activeOrders}
+                    onOrderPress={(order) => {
+                      navigation.navigate('OrderDetails', { orderId: order.id });
+                    }}
+                  />
+                )}
+              </GlassCard>
+            </TouchableOpacity>
+
+            {/* Recent Deposits (tappable) */}
+            <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('AllDeposits')}>
+              <GlassCard style={styles.card} borderRadius={16} contentStyle={{paddingVertical: 16}}>
+                <Text style={[styles.sectionTitle, { color: '#FFF', fontSize: 20, fontWeight: 'bold', marginBottom: 8 }]}>Recent Deposits</Text>
+                {recentDeposits.length === 0 ? (
+                  <Text style={styles.emptyText}>No recent deposits.</Text>
+                ) : (
+                  recentDeposits.map((deposit) => (
+                    <View key={deposit.id} style={styles.transactionItem}>
+                      <View style={styles.transactionInfo}>
+                        <Text style={styles.transactionCustomer}>{deposit.user_name}</Text>
+                        <Text style={styles.transactionDate}>
+                          {new Date(deposit.created_at).toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <View style={styles.transactionAmount}>
+                        <Text style={styles.amountText}>+${(deposit.amount / 100).toFixed(2)}</Text>
+                      </View>
                     </View>
-                  </View>
-                </View>
-              ))
-            )}
-          </View>
-        </ScrollView>
-      </SafeAreaView>
+                  ))
+                )}
+              </GlassCard>
+            </TouchableOpacity>
+
+            {/* Recent Redemptions (tappable) */}
+            <TouchableOpacity activeOpacity={0.85} onPress={() => navigation.navigate('AllRedemptions')}>
+              <GlassCard style={styles.card} borderRadius={16} contentStyle={{paddingVertical: 16}}>
+                <Text style={[styles.sectionTitle, { color: '#FFF', fontSize: 20, fontWeight: 'bold', marginBottom: 8 }]}>Recent Redemptions</Text>
+                {recentTransactions.length === 0 ? (
+                  <Text style={styles.emptyText}>No recent redemptions.</Text>
+                ) : (
+                  recentTransactions.map((transaction) => (
+                    <View 
+                      key={transaction.id}
+                      style={styles.transactionItem}
+                    >
+                      <View style={styles.transactionInfo}>
+                        <Text style={styles.transactionCustomer}>{transaction.user_name}</Text>
+                        <Text style={styles.transactionDate}>
+                          {new Date(transaction.created_at).toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <View style={styles.transactionAmount}>
+                        <Text style={styles.amountText}>-${(transaction.amount / 100).toFixed(2)}</Text>
+                        <View style={styles.transactionStatus}>
+                          <Text style={[
+                            styles.statusText,
+                            { color: '#FFF' }
+                          ]}>
+                            {transaction.status.replace('_', ' ')}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </GlassCard>
+            </TouchableOpacity>
+          </ScrollView>
+        </SafeAreaView>
+      </BackgroundGradient>
     );
   }
 
   // Render customer view
   if (!isOwner) {
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.surface.primary }}>
-        {/* Header with Profile and Inbox buttons */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, marginBottom: 8 }}>
-          <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={{ padding: 8 }}>
-            <FontAwesome name="user" size={28} color={COLORS.primary} />
-          </TouchableOpacity>
-          <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.text.white, flex: 1, textAlign: 'center' }}>Home</Text>
-          <TouchableOpacity onPress={() => navigation.navigate('Inbox')} style={{ padding: 8 }}>
-            <FontAwesome name="envelope" size={26} color={COLORS.primary} />
-          </TouchableOpacity>
-        </View>
-        <ScrollView style={styles.container}>
-          {businessData?.locations?.length === 0 ? (
-            <View style={styles.emptyContainer}>
-              <FontAwesome name="map-marker" size={48} color={COLORS.text.muted} />
-              <Text style={styles.emptyText}>No locations available</Text>
-            </View>
-          ) : (
-            <CardStack
-              data={businessData.locations}
-              onCardPress={(location, action) => {
-                if (action === 'balances') {
-                  navigation.navigate('Balance');
-                } else if (action === 'all-transactions') {
-                  navigation.navigate('GlobalTransactions');
-                } else {
-                  navigation.navigate('LocationMenu', { locationId: location.id });
-                }
-              }}
-            />
-          )}
-        </ScrollView>
-      </SafeAreaView>
+      <BackgroundGradient>
+        <MeteorBackground />
+        <SafeAreaView style={{ flex: 1, backgroundColor: 'transparent' }}>
+          {/* Header with Profile and Inbox buttons */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingTop: 8, marginBottom: 8 }}>
+            <TouchableOpacity onPress={() => navigation.navigate('Profile')} style={{ padding: 8 }}>
+              <FontAwesome name="user" size={28} color={COLORS.primary} />
+            </TouchableOpacity>
+            <Text style={{ fontSize: 22, fontWeight: 'bold', color: COLORS.text.white, flex: 1, textAlign: 'center' }}>Home</Text>
+            <TouchableOpacity onPress={() => navigation.navigate('Inbox')} style={{ padding: 8 }}>
+              <FontAwesome name="envelope" size={26} color={COLORS.primary} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={styles.container}>
+            {businessData?.locations?.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <FontAwesome name="map-marker" size={48} color={COLORS.text.muted} />
+                <Text style={styles.emptyText}>No locations available</Text>
+              </View>
+            ) : (
+              <CardStack
+                data={businessData.locations}
+                onCardPress={(location, action) => {
+                  if (action === 'balances') {
+                    navigation.navigate('Balance');
+                  } else if (action === 'all-transactions') {
+                    navigation.navigate('GlobalTransactions');
+                  } else {
+                    navigation.navigate('LocationMenu', { locationId: location.id });
+                  }
+                }}
+              />
+            )}
+          </ScrollView>
+        </SafeAreaView>
+      </BackgroundGradient>
     );
   }
 }
@@ -882,35 +928,102 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.surface.primary,
+    paddingHorizontal: 16,
   },
-  sectionBox: {
-    backgroundColor: COLORS.surface.card,
-    borderRadius: 16,
-    marginHorizontal: 12,
-    marginTop: 12,
-    padding: 16,
+  backgroundGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 24,
+    marginTop: 16,
+  },
+  logoLarge: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    marginBottom: 12,
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.9)',
+  },
+  logoPlaceholderLarge: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: '#333',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.9)',
+  },
+  businessNameLarge: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#FFF',
+    textAlign: 'center',
+  },
+  card: {
+    marginBottom: 24,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+  },
+  statBox: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  metricValue: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FFF',
+  },
+  metricLabel: {
+    fontSize: 12,
+    color: '#FFF',
+    marginTop: 4,
+    textTransform: 'uppercase',
+  },
+  quickActionsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+  },
+  quickAction: {
+    width: '45%', // Two columns
+    marginBottom: 16,
+    marginHorizontal: 8,
+    aspectRatio: 1, // Make them square
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: COLORS.surface.primary,
+    backgroundColor: BACKGROUND_BASE,
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
-    color: COLORS.text.white,
+    color: '#FFF',
   },
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-    backgroundColor: COLORS.surface.primary,
+    backgroundColor: BACKGROUND_BASE,
   },
   errorText: {
-    color: COLORS.text.white,
+    color: '#FFF',
     fontSize: 16,
     textAlign: 'center',
     marginBottom: 20,
@@ -923,100 +1036,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   retryButtonText: {
-    color: COLORS.text.white,
+    color: '#FFF',
     fontSize: 16,
     fontWeight: '600',
   },
-  // Business Owner Styles
-  header: {
-    alignItems: 'center',
-    padding: 20,
-  },
-  logo: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    marginBottom: 10,
-  },
-  logoPlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  businessName: {
-    fontSize: 24,
+  sectionTitle: {
+    color: '#FFF',
+    fontSize: 20,
     fontWeight: 'bold',
-    color: COLORS.text.white,
-  },
-  metricsContainer: {
-    // removed background and padding for new stat row style
-  },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginHorizontal: 8,
-    marginTop: 12,
-  },
-  statBox: {
-    flex: 1,
-    backgroundColor: COLORS.surface.card, // or a custom light gray
-    borderRadius: 16,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    marginHorizontal: 4,
-  },
-  metricValue: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    color: COLORS.primary,
-    marginBottom: 4,
-  },
-  metricLabel: {
-    fontSize: 14,
-    color: COLORS.text.muted,
-  },
-  noteContainer: {
-    padding: 16,
-    backgroundColor: COLORS.surface.card,
-    marginTop: 16,
-  },
-  noteText: {
-    color: COLORS.text.muted,
-    fontSize: 14,
-  },
-  quickActionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginHorizontal: 12,
-    marginTop: 18,
-  },
-  quickAction: {
-    flexBasis: '49%',
-    height: 130,
-    backgroundColor: COLORS.surface.secondary,
-    borderRadius: 16,
-    alignItems: 'center',
     marginBottom: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    justifyContent: 'center',
-  },
-  quickActionText: {
-    color: COLORS.text.white,
-    marginTop: 8,
-    fontSize: 14,
-  },
-  transactionsContainer: {
-    padding: 16,
-    backgroundColor: COLORS.surface.card,
-    marginTop: 16,
-    marginBottom: 16,
   },
   transactionItem: {
     flexDirection: 'row',
@@ -1024,7 +1052,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
   },
   transactionInfo: {
     flex: 1,
@@ -1032,12 +1060,13 @@ const styles = StyleSheet.create({
   transactionCustomer: {
     fontSize: 16,
     fontWeight: '500',
-    color: COLORS.text.white,
+    color: '#FFF',
     marginBottom: 4,
   },
   transactionDate: {
     fontSize: 14,
-    color: COLORS.text.muted,
+    color: '#FFF',
+    opacity: 0.7,
   },
   transactionAmount: {
     alignItems: 'flex-end',
@@ -1045,19 +1074,16 @@ const styles = StyleSheet.create({
   amountText: {
     fontSize: 16,
     fontWeight: '600',
-    color: COLORS.text.white,
+    color: '#FFF',
     marginBottom: 4,
   },
   statusText: {
     fontSize: 14,
     textTransform: 'capitalize',
+    color: '#FFF',
   },
   transactionStatus: {
     alignItems: 'flex-end',
-  },
-  // Customer View Styles
-  locationsContainer: {
-    padding: 16,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -1065,114 +1091,63 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   emptyText: {
-    color: COLORS.text.muted,
+    color: '#FFF',
+    opacity: 0.7,
     fontSize: 16,
     marginTop: 16,
   },
-  locationBox: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.surface.card,
-    borderRadius: 12,
+  viewAllButtonContainer: {
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  activeOrdersContainer: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    minHeight: 200,
+    position: 'relative',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.2)',
+  },
+  activeOrdersContent: {
     padding: 16,
-    marginBottom: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-    elevation: 5,
+    position: 'relative',
+    zIndex: 1,
   },
-  logoContainer: {
-    width: 50,
-    height: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
+  activeOrderItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 0,
+    marginBottom: 4,
   },
-  logoCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
+  activeOrderItemBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255, 255, 255, 0.2)',
   },
-  logo: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-  },
-  locationInfo: {
-    flex: 1,
-    paddingHorizontal: 16,
-  },
-  locationText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text.white,
-  },
-  pointsContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  pointsNumber: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: COLORS.text.white,
-  },
-  logoLarge: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    marginBottom: 16,
-  },
-  logoPlaceholderLarge: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  businessNameLarge: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    color: COLORS.text.white,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  sectionTitle: {
-    color: COLORS.text.white,
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  cardStackContainer: {
-    marginTop: 32,
-    backgroundColor: COLORS.surface.primary,
-  },
-  card: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
-  cardContent: {
-    flex: 1,
+  activeOrderHeader: {
+    flexDirection: 'row',
     justifyContent: 'space-between',
-  },
-  cardTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
+    alignItems: 'center',
     marginBottom: 8,
   },
-  cardSubtitle: {
+  activeOrderNumber: {
     fontSize: 16,
-    color: 'rgba(255, 255, 255, 0.8)',
+    fontWeight: 'bold',
+    color: '#FFF',
+  },
+  activeOrderStatus: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#FFF',
+  },
+  activeOrderItems: {
+    marginBottom: 8,
+  },
+  activeOrderItemText: {
+    fontSize: 14,
+    color: '#FFF',
+  },
+  activeOrderTip: {
+    fontSize: 12,
+    color: '#FFF',
+    marginTop: 8,
   },
 }); 
